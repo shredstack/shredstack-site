@@ -29,7 +29,7 @@ export const projects: Project[] = [
     status: "Active",
     gradient: "from-rainbow-cyan to-rainbow-teal",
     githubUrl: "https://github.com/shredstack/fuel-rx",
-    liveUrl: "https://fuel-rx.vercel.app",
+    liveUrl: "https://fuel-rx.shredstack.net",
   },
   {
     id: "shredstack",
@@ -58,6 +58,7 @@ export const projects: Project[] = [
     status: "Active",
     gradient: "from-rainbow-teal to-rainbow-purple",
     githubUrl: "https://github.com/shredstack/story-bloom",
+    liveUrl: "https://story-bloom.shredstack.net",
   },
 
   // Professional Work
