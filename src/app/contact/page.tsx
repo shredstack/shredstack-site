@@ -108,7 +108,7 @@ export default function ContactPage() {
           {/* Alternative Contact Methods */}
           <div className="mt-12 grid md:grid-cols-2 gap-6">
             <a
-              href="mailto:sarah@shredstack.net"
+              href="mailto:shredstacksarah@gmail.com"
               className="card p-6 flex items-center gap-4 group relative overflow-hidden"
             >
               <div className="absolute top-0 left-0 right-0 h-1 bg-rainbow-cyan opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -129,7 +129,7 @@ export default function ContactPage() {
               </div>
               <div>
                 <h3 className="font-semibold text-white group-hover:text-rainbow-cyan transition-colors">Email</h3>
-                <p className="text-surface-400 text-sm">sarah@shredstack.net</p>
+                <p className="text-surface-400 text-sm">shredstacksarah@gmail.com</p>
               </div>
             </a>
 

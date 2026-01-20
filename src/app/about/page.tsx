@@ -20,7 +20,7 @@ const skills = {
     "Scikit-learn",
     "TensorFlow",
     "dbt",
-    "Apache Airflow",
+    "Snowflake",
   ],
   "Infrastructure": [
     "AWS",

@@ -1,23 +1,9 @@
 import Link from "next/link";
-
-const featuredProjects = [
-  {
-    name: "FuelRx",
-    description:
-      "A custom nutrition tracking app built with Next.js, Supabase, and AI-powered meal analysis.",
-    tech: ["Next.js", "TypeScript", "Supabase", "AI"],
-    href: "/projects#fuelrx",
-    color: "from-rainbow-cyan to-rainbow-teal",
-  },
-  {
-    name: "Locumsmart VMS",
-    description:
-      "Enterprise healthcare staffing platform handling thousands of providers and facilities.",
-    tech: ["Data Engineering", "Python", "SQL"],
-    href: "/projects#locumsmart",
-    color: "from-rainbow-purple to-rainbow-indigo",
-  },
-];
+import { ProjectCard } from "@/components/ProjectCard";
+import {
+  getFeaturedPersonalProjects,
+  getFeaturedProfessionalProjects,
+} from "@/data/projects";
 
 export default function Home() {
   return (
@@ -52,12 +38,12 @@ export default function Home() {
         <div className="absolute left-1/3 top-20 w-48 h-48 bg-rainbow-teal rounded-full blur-3xl opacity-15" />
       </section>
 
-      {/* Featured Projects Section */}
+      {/* Personal Projects Section */}
       <section className="py-20 bg-surface-900">
         <div className="section-container">
           <div className="flex items-center justify-between mb-12">
             <h2 className="text-3xl font-bold text-white">
-              Featured Projects
+              Personal Projects
             </h2>
             <Link
               href="/projects"
@@ -68,30 +54,28 @@ export default function Home() {
           </div>
 
           <div className="grid md:grid-cols-2 gap-8">
-            {featuredProjects.map((project) => (
-              <Link
-                key={project.name}
-                href={project.href}
-                className="group block p-6 card relative overflow-hidden"
-              >
-                {/* Gradient accent bar */}
-                <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${project.color}`} />
+            {getFeaturedPersonalProjects().map((project) => (
+              <ProjectCard key={project.id} project={project} compact />
+            ))}
+          </div>
+        </div>
+      </section>
 
-                <h3 className="text-xl font-semibold text-white group-hover:text-accent-400 transition-colors">
-                  {project.name}
-                </h3>
-                <p className="mt-3 text-surface-400">{project.description}</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {project.tech.map((tech, i) => (
-                    <span
-                      key={tech}
-                      className={`tag ${i % 2 === 0 ? 'tag-primary' : 'tag-accent'}`}
-                    >
-                      {tech}
-                    </span>
-                  ))}
-                </div>
-              </Link>
+      {/* Professional Work Section */}
+      <section className="py-20 bg-surface-800">
+        <div className="section-container">
+          <div className="mb-12">
+            <h2 className="text-3xl font-bold text-white">
+              Professional Work
+            </h2>
+            <p className="mt-2 text-surface-400">
+              Projects I&apos;ve built at Locumsmart
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-8">
+            {getFeaturedProfessionalProjects().map((project) => (
+              <ProjectCard key={project.id} project={project} compact />
             ))}
           </div>
         </div>
@@ -109,11 +93,63 @@ export default function Home() {
             <p className="text-lg text-surface-300 mb-8">
               With a background in data engineering and a passion for machine learning,
               I enjoy tackling complex problems and building tools that make a difference.
-              When I&apos;m not coding, you&apos;ll find me at CrossFit or exploring the outdoors.
             </p>
             <Link href="/about" className="btn-secondary">
               Learn More About Me
             </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Beyond the Code Section */}
+      <section className="py-20 bg-surface-900">
+        <div className="section-container">
+          <h2 className="text-3xl font-bold text-white text-center mb-4">
+            Beyond the Code
+          </h2>
+          <p className="text-surface-400 text-center mb-12 max-w-2xl mx-auto">
+            When I&apos;m not building data pipelines or training models, you&apos;ll find me chasing adventures and spending time with my favorite people.
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+            {[
+              { icon: "🏋️", label: "CrossFit", color: "from-rainbow-red to-rainbow-orange", href: "https://games.crossfit.com/athlete/2005988" },
+              { icon: "🏄‍♀️", label: "Wakeboarding", color: "from-rainbow-cyan to-rainbow-teal" },
+              { icon: "🏂", label: "Snowboarding", color: "from-rainbow-indigo to-rainbow-purple" },
+              { icon: "🧗‍♀️", label: "Rock Climbing", color: "from-rainbow-orange to-rainbow-yellow" },
+              { icon: "🥾", label: "Hiking", color: "from-rainbow-teal to-rainbow-cyan" },
+              { icon: "👧👦", label: "Mom of Two", color: "from-rainbow-purple to-rainbow-indigo" },
+              { icon: "💕", label: "Wife Life", color: "from-rainbow-red to-rainbow-purple" },
+              { icon: "💪", label: "Adventure Seeker", color: "from-rainbow-cyan to-rainbow-indigo" },
+            ].map((interest) => {
+              const content = (
+                <>
+                  <div className={`absolute inset-0 bg-gradient-to-br ${interest.color} opacity-0 group-hover:opacity-10 rounded-xl transition-opacity`} />
+                  <div className="text-3xl mb-2">{interest.icon}</div>
+                  <div className="text-sm font-medium text-surface-300 group-hover:text-white transition-colors">
+                    {interest.label}
+                  </div>
+                </>
+              );
+
+              return interest.href ? (
+                <a
+                  key={interest.label}
+                  href={interest.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group relative p-4 rounded-xl bg-surface-800 border border-surface-700 hover:border-surface-600 transition-all hover:scale-105 cursor-pointer"
+                >
+                  {content}
+                </a>
+              ) : (
+                <div
+                  key={interest.label}
+                  className="group relative p-4 rounded-xl bg-surface-800 border border-surface-700 hover:border-surface-600 transition-all hover:scale-105"
+                >
+                  {content}
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
