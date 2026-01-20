@@ -81,26 +81,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* About Preview Section */}
-      <section className="py-20 bg-surface-800 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-rainbow-soft opacity-30" />
-        <div className="section-container relative z-10">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-3xl font-bold text-white mb-6">
-              Building at the Intersection of{" "}
-              <span className="text-gradient-rainbow">Data & AI</span>
-            </h2>
-            <p className="text-lg text-surface-300 mb-8">
-              With a background in data engineering and a passion for machine learning,
-              I enjoy tackling complex problems and building tools that make a difference.
-            </p>
-            <Link href="/about" className="btn-secondary">
-              Learn More About Me
-            </Link>
-          </div>
-        </div>
-      </section>
-
       {/* Beyond the Code Section */}
       <section className="py-20 bg-surface-900">
         <div className="section-container">
@@ -150,6 +130,26 @@ export default function Home() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* About Preview Section */}
+      <section className="py-20 bg-surface-800 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-rainbow-soft opacity-30" />
+        <div className="section-container relative z-10">
+          <div className="max-w-3xl mx-auto text-center">
+            <h2 className="text-3xl font-bold text-white mb-6">
+              Building at the Intersection of{" "}
+              <span className="text-gradient-rainbow">Data & AI</span>
+            </h2>
+            <p className="text-lg text-surface-300 mb-8">
+              With a background in data engineering and a passion for machine learning,
+              I enjoy tackling complex problems and building tools that make a difference.
+            </p>
+            <Link href="/about" className="btn-secondary">
+              Learn More About Me
+            </Link>
           </div>
         </div>
       </section>

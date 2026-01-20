@@ -232,7 +232,7 @@ export default function ContactPage() {
             </a>
 
             <a
-              href="https://linkedin.com/in/sarahdorich"
+              href="https://www.linkedin.com/in/sarahdorich/"
               target="_blank"
               rel="noopener noreferrer"
               className="card p-6 flex items-center gap-4 group relative overflow-hidden"
@@ -280,7 +280,7 @@ export default function ContactPage() {
             </a>
 
             <a
-              href="https://twitter.com/sarahdorich"
+              href="https://x.com/shredstacksarah"
               target="_blank"
               rel="noopener noreferrer"
               className="card p-6 flex items-center gap-4 group relative overflow-hidden"
