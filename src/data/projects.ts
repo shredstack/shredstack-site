@@ -20,14 +20,16 @@ export const projects: Project[] = [
     id: "fuelrx",
     name: "FuelRx",
     description:
-      "A custom nutrition tracking app built with Next.js, Supabase, and AI-powered meal analysis.",
+      "AI-powered meal planning for CrossFit athletes. Your week of food, figured out.",
     longDescription:
-      "Built to solve my own frustration with existing nutrition apps, FuelRx uses the Anthropic API to analyze meal photos and descriptions, automatically calculating macros and nutrients. Features include meal history, progress tracking, and goal setting.",
-    techStack: ["Next.js", "TypeScript", "Supabase", "Anthropic API", "Tailwind CSS"],
+      "A nutrition planning app designed for CrossFit athletes that combines AI-generated meal planning with community-refined recommendations. Features personalized weekly meal plans based on macro targets, automated grocery lists, optional one-tap macro tracking, and prep time optimization. Built with a planning-first approach that makes healthy eating the easiest choice.",
+    techStack: ["Next.js", "TypeScript", "Supabase", "Anthropic API", "Tailwind CSS", "Capacitor"],
     category: "personal",
     featured: true,
     status: "Active",
     gradient: "from-rainbow-cyan to-rainbow-teal",
+    githubUrl: "https://github.com/shredstack/fuel-rx",
+    liveUrl: "https://fuel-rx.vercel.app",
   },
   {
     id: "shredstack",
@@ -38,10 +40,24 @@ export const projects: Project[] = [
       "A place to showcase projects, share technical content, and experiment with new ideas. Built with Next.js 15, TypeScript, and Tailwind CSS, with plans to add a blog, interactive playground, and AI-powered features.",
     techStack: ["Next.js 15", "TypeScript", "Tailwind CSS", "Vercel"],
     category: "personal",
-    githubUrl: "https://github.com/sarahdorich/shredstack-site",
+    githubUrl: "https://github.com/shredstack/shredstack-site",
     featured: false,
     status: "Active",
     gradient: "from-rainbow-pink to-rainbow-orange",
+  },
+  {
+    id: "storybloom",
+    name: "StoryBloom",
+    description:
+      "AI-powered reading platform that helps reluctant young readers become confident learners through personalized stories and gamified word practice.",
+    longDescription:
+      "Built for my daughter who was behind in reading, StoryBloom transforms learning into an adventure. Features personalized AI-generated stories where the child is the protagonist, a speech-based Word Quest game with pronunciation feedback, and virtual pet companions that children nurture by practicing reading. Supports multiple child profiles with individualized settings for age, reading level, and interests.",
+    techStack: ["Next.js 15", "TypeScript", "Tailwind CSS", "Supabase", "Anthropic API", "DALL-E 3", "Web Speech API"],
+    category: "personal",
+    featured: true,
+    status: "Active",
+    gradient: "from-rainbow-teal to-rainbow-purple",
+    githubUrl: "https://github.com/shredstack/story-bloom",
   },
 
   // Professional Work
@@ -70,6 +86,32 @@ export const projects: Project[] = [
     featured: true,
     status: "Professional",
     gradient: "from-rainbow-indigo to-rainbow-cyan",
+  },
+  {
+    id: "vitalcast",
+    name: "VitalCast",
+    description:
+      "AI-powered call volume forecasting system that revolutionized operational efficiency for the largest VRS company in North America.",
+    longDescription:
+      "Automated predictive modeling system for nationwide Video Relay Service (VRS) call centers that outperformed human-generated predictions. Achieved ±2.5% relative error 90%+ of the time and freed 4+ hours weekly for the VP of Operations. Built with NARX neural networks, ensemble architectures, and custom Erlang C/A queuing models for agent staffing optimization. Featured automated nightly re-forecasting across a 13-week horizon, intraday granular predictions, and interactive GUI tools for operations staff. One of my first major professional projects—still in production use 3+ years after I left because a team of data scientists couldn't beat its accuracy.",
+    techStack: ["MATLAB", "Neural Networks", "SQL Server", "Java", "Time Series", "Queuing Theory"],
+    category: "professional",
+    featured: false,
+    status: "Professional",
+    gradient: "from-rainbow-orange to-rainbow-pink",
+  },
+  {
+    id: "homie-listing-recommender",
+    name: "Real Estate Listing Recommender",
+    description:
+      "Intelligent recommendation engine matching home buyers with relevant property listings through personalized, multi-modal suggestions.",
+    longDescription:
+      "Built a hybrid recommendation system for a real estate platform combining collaborative filtering (LightFM), content-based features, and deep learning image similarity. Processed property data at scale with Apache Spark, extracting features from listings including TF-IDF on descriptions, normalized numerical attributes, and VGG16 visual embeddings from property photos. Implemented geographic filtering with 25km radius constraints and orchestrated the ML pipeline with Metaflow on Databricks.",
+    techStack: ["Python", "Apache Spark", "LightFM", "TensorFlow", "Databricks", "Metaflow", "NLTK"],
+    category: "professional",
+    featured: false,
+    status: "Professional",
+    gradient: "from-rainbow-cyan to-rainbow-indigo",
   },
 ];
 
