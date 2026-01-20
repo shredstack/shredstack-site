@@ -43,3 +43,4 @@ next-env.d.ts
 
 # instructions for claude code that don't need to be checked in
 claude_instructions/*
+.env*.local
