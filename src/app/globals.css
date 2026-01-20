@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-surface-900 text-surface-100 antialiased;
+  }
+}
+
+@layer components {
+  /* Primary button with gradient */
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-6 py-3 rounded-lg
+           bg-gradient-to-r from-primary-500 via-accent-500 to-rainbow-teal
+           text-white font-semibold
+           hover:from-primary-600 hover:via-accent-600 hover:to-rainbow-teal
+           transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-primary-500/25
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-surface-900;
+  }
+
+  /* Secondary button with border gradient effect */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-6 py-3 rounded-lg
+           border-2 border-primary-400 text-primary-400 font-semibold
+           hover:bg-primary-500/10 hover:border-accent-400 hover:text-accent-400
+           transition-all duration-300
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-surface-900;
+  }
+
+  .section-container {
+    @apply max-w-6xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Card styles for dark theme */
+  .card {
+    @apply bg-surface-800/50 backdrop-blur-sm border border-surface-700 rounded-xl
+           hover:border-primary-500/50 hover:shadow-lg hover:shadow-primary-500/10
+           transition-all duration-300;
+  }
+
+  /* Rainbow gradient text */
+  .text-gradient-rainbow {
+    @apply bg-gradient-to-r from-rainbow-indigo via-rainbow-cyan to-rainbow-green
+           bg-clip-text text-transparent;
+  }
+
+  /* Glowing effect for special elements */
+  .glow {
+    @apply shadow-lg shadow-primary-500/30;
+  }
+
+  /* Tag/badge styles with rainbow colors */
+  .tag {
+    @apply px-3 py-1 rounded-full text-sm font-medium
+           bg-surface-700/50 text-surface-300 border border-surface-600
+           hover:border-primary-500/50 transition-colors duration-200;
+  }
+
+  .tag-primary {
+    @apply px-3 py-1 rounded-full text-sm font-medium
+           bg-primary-500/20 text-primary-300 border border-primary-500/30;
+  }
+
+  .tag-accent {
+    @apply px-3 py-1 rounded-full text-sm font-medium
+           bg-accent-500/20 text-accent-300 border border-accent-500/30;
+  }
+}
