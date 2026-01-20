@@ -5,13 +5,20 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "drizzle-kit migrate && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:generate": "dotenv -e .env.local -- drizzle-kit generate",
+    "db:migrate": "dotenv -e .env.local -- drizzle-kit migrate",
+    "db:push": "dotenv -e .env.local -- drizzle-kit push",
+    "db:studio": "dotenv -e .env.local -- drizzle-kit studio"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.0",
+    "@neondatabase/serverless": "^1.0.2",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.39.0",
+    "drizzle-orm": "^0.45.1",
     "next": "^15.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -23,6 +30,9 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.23",
+    "dotenv": "^17.2.3",
+    "dotenv-cli": "^11.0.0",
+    "drizzle-kit": "^0.31.8",
     "eslint": "^8",
     "eslint-config-next": "^15.0.0",
     "postcss": "^8",
