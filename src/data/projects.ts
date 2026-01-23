@@ -46,6 +46,20 @@ export const projects: Project[] = [
     gradient: "from-rainbow-pink to-rainbow-orange",
   },
   {
+    id: "arrow-polynomial-theorem",
+    name: "Arrow Polynomial Theorem",
+    description:
+      "Original mathematical theorem extending Murasugi's relationship to the Arrow polynomial for periodic virtual links. Presented at the 2013 AMS Sectional Conference.",
+    longDescription:
+      "Research in virtual knot theory (VKT), a topological subject studying embeddings of curves in thickened orientable surfaces of arbitrary genus. Proved a relationship between periodic virtual links and their factor links, extending Murasugi's classical result to the Arrow polynomial. This work was presented at the invitation-only 2013 AMS Sectional Conference in St. Louis.",
+    techStack: ["Topology", "Virtual Knot Theory", "Mathematical Proof", "Research"],
+    category: "personal",
+    featured: true,
+    status: "Archived",
+    gradient: "from-rainbow-purple to-rainbow-pink",
+    liveUrl: "/documents/Arrow Polynomial of PVK.pdf",
+  },
+  {
     id: "storybloom",
     name: "StoryBloom",
     description:
