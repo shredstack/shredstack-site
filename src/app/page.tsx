@@ -13,12 +13,12 @@ export default function Home() {
         <div className="section-container py-20 md:py-32 relative z-10">
           <div className="max-w-3xl">
             <h1 className="text-4xl md:text-6xl font-bold text-white leading-tight">
-              Hi, I&apos;m{" "}
-              <span className="text-gradient-rainbow">Sarah</span>
+              Hey, I&apos;m{" "}
+              <span className="text-gradient-rainbow">Sarah!</span>
             </h1>
             <p className="mt-6 text-xl md:text-2xl text-surface-300 leading-relaxed">
               AI & Data Engineer at Locumsmart. I build data pipelines, ML systems,
-              and side projects that solve real problems.
+              and fun side projects that solve real problems.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Link href="/projects" className="btn-primary">

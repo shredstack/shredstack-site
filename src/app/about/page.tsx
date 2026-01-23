@@ -13,6 +13,7 @@ const skills = {
     "Next.js",
     "React",
     "Node.js",
+    "Capacitor",
   ],
   "Data & ML": [
     "Pandas",
@@ -24,7 +25,7 @@ const skills = {
   ],
   "Infrastructure": [
     "AWS",
-    "GCP",
+    "Inngest",
     "Docker",
     "Kubernetes",
     "Terraform",
@@ -37,6 +38,9 @@ const skills = {
     "Data Modeling",
     "ETL/ELT",
     "API Design",
+    "Anthropic API",
+    "LLM Prompt Engineering",
+    "RAG Architecture",
   ],
 };
 
@@ -97,10 +101,21 @@ export default function AboutPage() {
                 </p>
                 <ul className="space-y-3">
                   <li className="flex items-start gap-3">
+                    <span className="w-2 h-2 mt-2 rounded-full bg-rainbow-pink flex-shrink-0" />
+                    <span>
+                      <strong className="text-rainbow-pink">StoryBloom</strong> - A reading app
+                      for my daughter who has been very reluctant to read. But StoryBloom generates
+                      stories she loves and incorporates games and rewards to keep her motivated.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-3">
                     <span className="w-2 h-2 mt-2 rounded-full bg-rainbow-cyan flex-shrink-0" />
                     <span>
-                      <strong className="text-rainbow-cyan">FuelRx</strong> - A nutrition tracking
-                      app that uses AI to make meal logging effortless
+                      <strong className="text-rainbow-cyan">FuelRx</strong> - A meal planning app I built
+                      to solve my own nutrition struggles as a CrossFit athlete—AI-generated plans to get your nutrition goals met,
+                      smart grocery lists, logging/food tracking daily made easy. I used to use MyFitnessPal but FuelRx is
+                      way better for athletes who want to eat healthy but might not know what meals to cook
+                      every week.
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
@@ -126,7 +141,8 @@ export default function AboutPage() {
               <div className="max-w-none text-surface-300 space-y-4">
                 <p>
                   When I&apos;m not writing code, you&apos;ll find me at the gym doing CrossFit,
-                  hiking trails, or spending time with family. I believe the discipline and
+                  hiking trails, boating and doing water sports, shredding the slopes
+                  and spending time with family. I believe the discipline and
                   problem-solving mindset from fitness translates directly to engineering -
                   both require consistency, adaptability, and pushing through challenges.
                 </p>
