@@ -29,6 +29,10 @@ export const metadata: Metadata = {
     "Next.js",
     "TypeScript",
   ],
+  icons: {
+    icon: "/shredstack_logo.png",
+    apple: "/shredstack_logo.png",
+  },
 };
 
 export default function RootLayout({

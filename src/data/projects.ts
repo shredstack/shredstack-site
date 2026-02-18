@@ -17,21 +17,6 @@ export interface Project {
 export const projects: Project[] = [
   // Personal Projects
   {
-    id: "fuelrx",
-    name: "FuelRx",
-    description:
-      "AI-powered meal planning for CrossFit athletes. Your week of food, figured out.",
-    longDescription:
-      "A nutrition planning app designed for CrossFit athletes that combines AI-generated meal planning with community-refined recommendations. Features personalized weekly meal plans based on macro targets, automated grocery lists, optional one-tap macro tracking, and prep time optimization. Built with a planning-first approach that makes healthy eating the easiest choice.",
-    techStack: ["Next.js", "TypeScript", "Supabase", "Anthropic API", "Tailwind CSS", "Capacitor"],
-    category: "personal",
-    featured: true,
-    status: "Active",
-    gradient: "from-rainbow-cyan to-rainbow-teal",
-    githubUrl: "https://github.com/shredstack/fuel-rx",
-    liveUrl: "https://fuel-rx.shredstack.net",
-  },
-  {
     id: "shredstack",
     name: "ShredStack Site",
     description:
@@ -73,6 +58,79 @@ export const projects: Project[] = [
     gradient: "from-rainbow-teal to-rainbow-purple",
     githubUrl: "https://github.com/shredstack/story-bloom",
     liveUrl: "https://story-bloom.shredstack.net",
+  },
+  {
+    id: "fuelrx",
+    name: "FuelRx",
+    description:
+      "AI-powered meal planning for CrossFit athletes. Your week of food, figured out.",
+    longDescription:
+      "A nutrition planning app designed for CrossFit athletes that combines AI-generated meal planning with community-refined recommendations. Features personalized weekly meal plans based on macro targets, automated grocery lists, optional one-tap macro tracking, and prep time optimization. Built with a planning-first approach that makes healthy eating the easiest choice.",
+    techStack: ["Next.js", "TypeScript", "Supabase", "Anthropic API", "Tailwind CSS", "Capacitor"],
+    category: "personal",
+    featured: true,
+    status: "Active",
+    gradient: "from-rainbow-cyan to-rainbow-teal",
+    githubUrl: "https://github.com/shredstack/fuel-rx",
+    liveUrl: "https://fuel-rx.shredstack.net",
+  },
+  {
+    id: "dragon-hub",
+    name: "DragonHub",
+    description:
+      "The operating system for your PTA. AI-powered platform that modernizes Parent-Teacher Association operations with smart event planning, knowledge management, and community engagement.",
+    longDescription:
+      "A comprehensive platform designed to modernize PTA operations by replacing scattered spreadsheets, outdated email systems, and undocumented processes. Features AI-powered event planning with budget guidance, collaborative meeting minutes with automatic action item extraction, unified community calendars, volunteer hour tracking, classroom coordination hubs, and role-specific onboarding. Supports multi-school environments with isolated data and deep Google Workspace integration.",
+    techStack: ["Next.js 15", "TypeScript", "Tailwind CSS", "Supabase", "Anthropic API", "Google Workspace API"],
+    category: "personal",
+    featured: true,
+    status: "Active",
+    gradient: "from-rainbow-orange to-rainbow-teal",
+    githubUrl: "https://github.com/shredstack/dragon-hub",
+    liveUrl: "https://dragon-hub.shredstack.net",
+  },
+  {
+    id: "llm-lab",
+    name: "LLM Lab",
+    description:
+      "A framework for constructing, refining, and deploying specialized language models tailored to specific industries or domains.",
+    longDescription:
+      "A structured lab environment for developing domain-specific LLMs through a standardized five-stage workflow: exploration of base model capabilities, extraction of training data, creation of domain-specific benchmarks, fine-tuning with LoRA, and deployment via HuggingFace Endpoints. Each project operates independently with dedicated dependencies, supporting containerized development with Docker and interactive Jupyter notebook exploration.",
+    techStack: ["Python", "HuggingFace", "LoRA", "Docker", "Jupyter"],
+    category: "personal",
+    featured: true,
+    status: "Active",
+    gradient: "from-rainbow-indigo to-rainbow-purple",
+    githubUrl: "https://github.com/shredstack/llm-lab",
+  },
+  {
+    id: "lightdrop",
+    name: "LightDrop",
+    description:
+      "Music-synchronized DMX lighting control system for macOS. Automatically generates beat-synced light shows from audio files.",
+    longDescription:
+      "Bridges audio analysis with QLC+ professional lighting software to control physical DMX512 fixtures via USB-to-DMX adapter. Features automated beat detection, tempo analysis, and song structure segmentation to programmatically generate synchronized light shows. Supports multiple show styles from calm to dramatic, works with any DMX-compatible fixtures including RGB PAR cans and moving heads, and handles the complete pipeline from raw audio to playable show files.",
+    techStack: ["Python", "QLC+", "DMX512", "Audio Analysis"],
+    category: "personal",
+    featured: true,
+    status: "Active",
+    gradient: "from-rainbow-cyan to-rainbow-orange",
+    githubUrl: "https://github.com/shredstack/lightdrop",
+  },
+  {
+    id: "trip-craft",
+    name: "TripCraft",
+    description:
+      "AI-powered personal travel planner that finds the best destinations, excursions, and trip logistics using Claude AI recommendations grounded in real Google Places data.",
+    longDescription:
+      "Streamlines vacation planning through a guided wizard interface where Claude AI analyzes traveler preferences alongside real Google Places data to generate ranked destination recommendations with match scores. Features trip management dashboards, detailed trip pages with tabs for destinations, activities, logistics, and personal notes, plus curated excursion suggestions for each destination.",
+    techStack: ["Next.js 15", "TypeScript", "Tailwind CSS", "PostgreSQL", "Anthropic API", "Google Places API"],
+    category: "personal",
+    featured: true,
+    status: "Active",
+    gradient: "from-rainbow-teal to-rainbow-indigo",
+    githubUrl: "https://github.com/shredstack/trip-craft",
+    liveUrl: "https://trip-craft.shredstack.net",
   },
 
   // Professional Work
