@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0">
+<title>Draper Elementary Field Day 2026 — Station Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bounce: #7F77DD;
+    --photo: #E24B4A;
+    --obstacle: #D85A30;
+    --water: #378ADD;
+    --petting: #1D9E75;
+    --kickball: #639922;
+    --creative: #6B4FA0;
+    --dj: #BA7517;
+    --relay: #D4537E;
+    --grass: #6da832;
+    --blacktop: #8a8880;
+    --bg: #faf9f5;
+    --text: #2c2c2a;
+    --text-muted: #6e6e68;
+    --card-bg: #ffffff;
+    --card-border: rgba(0,0,0,0.08);
+    --shadow: 0 2px 12px rgba(0,0,0,0.06);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,0.10);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* === HEADER === */
+  .hero {
+    background: linear-gradient(135deg, #4a8c1c 0%, #6da832 40%, #8bba47 100%);
+    padding: 2.5rem 1.5rem 2rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -30%;
+    left: -10%;
+    width: 120%;
+    height: 160%;
+    background: radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.15) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.2);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 50px;
+    padding: 6px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #fff;
+    margin-bottom: 12px;
+    letter-spacing: 0.02em;
+  }
+  .hero h1 {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.8rem, 5vw, 2.8rem);
+    color: #fff;
+    line-height: 1.15;
+    margin-bottom: 6px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  }
+  .hero-sub {
+    font-size: 15px;
+    color: rgba(255,255,255,0.88);
+    font-weight: 400;
+  }
+
+  /* === SCHEDULE STRIP === */
+  .schedule-strip {
+    display: flex;
+    gap: 0;
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--card-border);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .schedule-item {
+    flex: 1;
+    min-width: 140px;
+    padding: 12px 16px;
+    text-align: center;
+    border-right: 1px solid var(--card-border);
+    font-size: 13px;
+  }
+  .schedule-item:last-child { border-right: none; }
+  .schedule-item .grade {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+  .schedule-item .time {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  /* === MAP === */
+  .map-section {
+    padding: 1.25rem 1rem;
+  }
+  .map-section h2 {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    margin-bottom: 4px;
+  }
+  .map-hint {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+  .map-frame {
+    position: relative;
+    width: 100%;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid var(--card-border);
+    box-shadow: var(--shadow);
+    background: #e8eedb;
+    touch-action: pan-x pan-y;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .map-frame svg {
+    display: block;
+    min-width: 700px;
+    width: 100%;
+    height: auto;
+  }
+
+  /* Station hover */
+  .st { cursor: pointer; transition: opacity 0.15s; }
+  .st:hover { opacity: 0.85; }
+  @media (hover: none) { .st:active { opacity: 0.85; } }
+
+  /* === LEGEND === */
+  .legend-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 6px 12px;
+    padding: 12px 0 0;
+  }
+  .legend-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .legend-chip span {
+    width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0;
+  }
+
+  /* === STATION DETAIL CARD === */
+  .detail-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    align-items: flex-end;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+  }
+  .detail-overlay.active { display: flex; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+  .detail-card {
+    background: var(--card-bg);
+    border-radius: 20px 20px 0 0;
+    width: 100%;
+    max-width: 540px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 0 1.5rem 2rem;
+    animation: slideUp 0.25s ease;
+    box-shadow: 0 -4px 30px rgba(0,0,0,0.15);
+  }
+  .detail-handle {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(0,0,0,0.15);
+    margin: 12px auto 16px;
+  }
+  .detail-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .detail-num {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .detail-title {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 20px;
+    line-height: 1.2;
+  }
+  .detail-location {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+    padding-left: 48px;
+  }
+  .detail-body {
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text);
+    margin-bottom: 14px;
+  }
+  .detail-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .meta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0,0,0,0.04);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+  .meta-pill svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+  /* === STATION LIST (below map for quick reference) === */
+  .stations-list {
+    padding: 0 1rem 2rem;
+  }
+  .stations-list h2 {
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    margin-bottom: 12px;
+  }
+  .station-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--card-border);
+    cursor: pointer;
+    transition: background 0.12s;
+    border-radius: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .station-row:hover, .station-row:active {
+    background: rgba(0,0,0,0.025);
+  }
+  .station-row:last-child { border-bottom: none; }
+  .row-num {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .row-info { flex: 1; }
+  .row-name {
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 1.3;
+  }
+  .row-loc {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .row-arrow {
+    color: var(--text-muted);
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  /* === FOOTER === */
+  .footer {
+    text-align: center;
+    padding: 1.5rem 1rem 2.5rem;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .footer a { color: var(--grass); text-decoration: none; }
+
+  /* Desktop tweaks */
+  @media (min-width: 640px) {
+    .map-frame svg { min-width: unset; }
+    .hero { padding: 3rem 2rem 2.5rem; }
+    .map-section, .stations-list { padding-left: 2rem; padding-right: 2rem; max-width: 900px; margin: 0 auto; }
+    .detail-card { border-radius: 20px; margin-bottom: 2rem; }
+    .detail-overlay { align-items: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-badge">Draper Elementary PTA</div>
+  <h1>Field Day 2026</h1>
+  <p class="hero-sub">Tuesday, May 26 &middot; 9:00 AM – 2:10 PM</p>
+</header>
+
+<!-- SCHEDULE -->
+<div class="schedule-strip">
+  <div class="schedule-item">
+    <div class="grade">5th &amp; 3rd</div>
+    <div class="time">9:00 – 10:45 AM</div>
+  </div>
+  <div class="schedule-item">
+    <div class="grade">2nd &amp; 4th</div>
+    <div class="time">10:40 AM – 12:15 PM</div>
+  </div>
+  <div class="schedule-item">
+    <div class="grade">1st &amp; K</div>
+    <div class="time">12:35 – 2:10 PM</div>
+  </div>
+</div>
+
+<!-- MAP -->
+<section class="map-section">
+  <h2>Station map</h2>
+  <p class="map-hint">Tap any station for details. Scroll sideways on small screens.</p>
+
+  <div class="map-frame">
+    <svg viewBox="0 0 960 600" xmlns="http://www.w3.org/2000/svg">
+
+      <!-- GRASS FIELD -->
+      <rect x="340" y="30" width="590" height="540" rx="10" fill="#8bba47" opacity="0.35"/>
+      <rect x="340" y="30" width="590" height="540" rx="10" fill="none" stroke="#5a8a20" stroke-width="1" opacity="0.4"/>
+      <text x="635" y="22" text-anchor="middle" font-size="11" font-weight="600" fill="#5a8a20" font-family="Fredoka, sans-serif" opacity="0.7">GRASS FIELD</text>
+
+      <!-- BLACKTOP -->
+      <rect x="30" y="30" width="290" height="540" rx="10" fill="#9e9e96" opacity="0.22"/>
+      <rect x="30" y="30" width="290" height="540" rx="10" fill="none" stroke="#6e6e68" stroke-width="1" opacity="0.4"/>
+      <text x="175" y="22" text-anchor="middle" font-size="11" font-weight="600" fill="#6e6e68" font-family="Fredoka, sans-serif" opacity="0.7">BLACKTOP / COURTS</text>
+
+      <!-- Court lines -->
+      <circle cx="175" cy="200" r="40" fill="none" stroke="#c8c4b8" stroke-width="1" opacity="0.5"/>
+      <circle cx="175" cy="420" r="40" fill="none" stroke="#c8c4b8" stroke-width="1" opacity="0.5"/>
+      <line x1="30" y1="310" x2="320" y2="310" stroke="#c8c4b8" stroke-width="0.8" opacity="0.4"/>
+
+      <!-- School building -->
+      <rect x="30" y="580" width="290" height="18" rx="4" fill="#6e6e68" opacity="0.12"/>
+      <text x="175" y="593" text-anchor="middle" font-size="10" fill="#6e6e68" font-family="DM Sans, sans-serif" opacity="0.6">SCHOOL BUILDING</text>
+
+      <!-- Fence -->
+      <line x1="340" y1="30" x2="340" y2="570" stroke="#6e6e68" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.25"/>
+
+      <!-- Mountain silhouette -->
+      <path d="M0 30 L80 15 L120 8 L200 18 L280 5 L360 22 L460 2 L540 16 L620 0 L700 14 L780 6 L860 18 L960 10 L960 30 Z" fill="#6e6e68" opacity="0.06"/>
+
+      <!-- ====== STATIONS ====== -->
+
+      <!-- 1. Bounce Houses -->
+      <g class="st" onclick="openDetail(1)">
+        <rect x="355" y="45" width="270" height="250" rx="10" fill="#7F77DD" opacity="0.14" stroke="#7F77DD" stroke-width="1.2" stroke-dasharray="5 3"/>
+        <rect x="375" y="80" width="100" height="80" rx="8" fill="#AFA9EC" opacity="0.45" stroke="#7F77DD" stroke-width="0.5"/>
+        <rect x="490" y="80" width="110" height="80" rx="8" fill="#AFA9EC" opacity="0.45" stroke="#7F77DD" stroke-width="0.5"/>
+        <rect x="375" y="180" width="100" height="80" rx="8" fill="#AFA9EC" opacity="0.45" stroke="#7F77DD" stroke-width="0.5"/>
+        <rect x="490" y="180" width="110" height="80" rx="8" fill="#AFA9EC" opacity="0.45" stroke="#7F77DD" stroke-width="0.5"/>
+        <circle cx="490" cy="55" r="13" fill="#7F77DD"/>
+        <text x="490" y="59" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family="Fredoka, sans-serif">1</text>
+        <text x="512" y="60" font-size="12" font-weight="600" fill="#534AB7" font-family="DM Sans, sans-serif">Bounce houses</text>
+      </g>
+
+      <!-- 5. Petting Zoo -->
+      <g class="st" onclick="openDetail(5)">
+        <rect x="645" y="45" width="270" height="175" rx="10" fill="#1D9E75" opacity="0.12" stroke="#1D9E75" stroke-width="1.2" stroke-dasharray="5 3"/>
+        <circle cx="780" cy="60" r="13" fill="#1D9E75"/>
+        <text x="780" y="64" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family="Fredoka, sans-serif">5</text>
+        <text x="802" y="64" font-size="12" font-weight="600" fill="#085041" font-family="DM Sans, sans-serif">Petting zoo</text>
+      </g>
+
+      <!-- 4. Water Fun -->
+      <g class="st" onclick="openDetail(4)">
+        <rect x="355" y="315" width="200" height="240" rx="10" fill="#378ADD" opacity="0.12" stroke="#378ADD" stroke-width="1.2" stroke-dasharray="5 3"/>
+        <circle cx="455" cy="330" r="13" fill="#378ADD"/>
+        <text x="455" y="334" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family="Fredoka, sans-serif">4</text>
+        <text x="477" y="334" font-size="12" font-weight="600" fill="#0C447C" font-family="DM Sans, sans-serif">Water fun</text>
+        <text x="378" y="385" font-size="10" fill="#185FA5" opacity="0.65" font-family="DM Sans, sans-serif">Downpour derby</text>
+        <text x="378" y="425" font-size="10" fill="#185FA5" opacity="0.65" font-family="DM Sans, sans-serif">Drip drop splash</text>
+        <text x="378" y="465" font-size="10" fill="#185FA5" opacity="0.65" font-family="DM Sans, sans-serif">Sponge brigade</text>
+      </g>
+
+      <!-- 3. Obstacle Course -->
+      <g class="st" onclick="openDetail(3)">
+        <rect x="645" y="240" width="270" height="130" rx="10" fill="#D85A30" opacity="0.12" stroke="#D85A30" stroke-width="1.2" stroke-dasharray="5 3"/>
+        <circle cx="780" cy="255" r="13" fill="#D85A30"/>
+        <text x="780" y="259" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family="Fredoka, sans-serif">3</text>
+        <text x="802" y="259" font-size="12" font-weight="600" fill="#712B13" font-family="DM Sans, sans-serif">Obstacle course</text>
+        <line x1="665" y1="292" x2="895" y2="292" stroke="#D85A30" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.4"/>
+        <line x1="665" y1="312" x2="895" y2="312" stroke="#D85A30" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.4"/>
+        <line x1="665" y1="332" x2="895" y2="332" stroke="#D85A30" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.4"/>
+        <line x1="665" y1="352" x2="895" y2="352" stroke="#D85A30" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.4"/>
+        <text x="882" y="307" font-size="9" fill="#993C1D" opacity="0.5" font-family="DM Sans, sans-serif">4 lanes</text>
+      </g>
+
+      <!-- 9. Relay Games -->
+      <g class="st" onclick="openDetail(9)">
+        <rect x="575" y="395" width="175" height="165" rx="10" fill="#D4537E" opacity="0.12" stroke="#D4537E" stroke-width="1.2" stroke-dasharray="5 3"/>
+        <circle cx="662" cy="410" r="13" fill="#D4537E"/>
+        <text x="662" y="414" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family="Fredoka, sans-serif">9</text>
+        <text x="684" y="414" font-size="12" font-weight="600" fill="#72243E" font-family="DM Sans, sans-serif">Relay games</text>
+        <text x="598" y="460" font-size="10" fill="#993556" opacity="0.65" font-family="DM Sans, sans-serif">Tug of war</text>
+        <text x="598" y="480" font-size="10" fill="#993556" opacity="0.65" font-family="DM Sans, sans-serif">Dress-up relay</text>
+      </g>
+
+      <!-- 6. Kickball / Soccer -->
+      <g class="st" onclick="openDetail(6)">
+        <rect x="770" y="395" width="145" height="165" rx="10" fill="#639922" opacity="0.12" stroke="#639922" stroke-width="1.2" stroke-dasharray="5 3"/>
+        <circle cx="842" cy="410" r="13" fill="#639922"/>
+        <text x="842" y="414" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family="Fredoka, sans-serif">6</text>
+        <text x="790" y="442" font-size="11" font-weight="600" fill="#27500A" font-family="DM Sans, sans-serif">Kickball /</text>
+        <text x="790" y="458" font-size="11" font-weight="600" fill="#27500A" font-family="DM Sans, sans-serif">Soccer /</text>
+        <text x="790" y="474" font-size="11" font-weight="600" fill="#27500A" font-family="DM Sans, sans-serif">Capture flag</text>
+      </g>
+
+      <!-- 8. DJ / Dance Party -->
+      <g class="st" onclick="openDetail(8)">
+        <rect x="55" y="115" width="240" height="170" rx="10" fill="#BA7517" opacity="0.12" stroke="#BA7517" stroke-width="1.2" stroke-dasharray="5 3"/>
+        <circle cx="175" cy="130" r="13" fill="#BA7517"/>
+        <text x="175" y="134" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family="Fredoka, sans-serif">8</text>
+        <text x="198" y="134" font-size="12" font-weight="600" fill="#633806" font-family="DM Sans, sans-serif">DJ / Dance party</text>
+      </g>
+
+      <!-- 2. Photo Booth -->
+      <g class="st" onclick="openDetail(2)">
+        <rect x="55" y="480" width="120" height="80" rx="10" fill="#E24B4A" opacity="0.12" stroke="#E24B4A" stroke-width="1.2" stroke-dasharray="5 3"/>
+        <circle cx="115" cy="495" r="13" fill="#E24B4A"/>
+        <text x="115" y="499" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family="Fredoka, sans-serif">2</text>
+        <text x="73" y="532" font-size="11" font-weight="600" fill="#791F1F" font-family="DM Sans, sans-serif">Photo booth</text>
+      </g>
+
+      <!-- 7. Creative Station -->
+      <g class="st" onclick="openDetail(7)">
+        <rect x="195" y="480" width="120" height="80" rx="10" fill="#6B4FA0" opacity="0.12" stroke="#6B4FA0" stroke-width="1.2" stroke-dasharray="5 3"/>
+        <circle cx="255" cy="495" r="13" fill="#6B4FA0"/>
+        <text x="255" y="499" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family="Fredoka, sans-serif">7</text>
+        <text x="207" y="532" font-size="11" font-weight="600" fill="#3C2870" font-family="DM Sans, sans-serif">Creative station</text>
+      </g>
+
+      <!-- Water refill stations -->
+      <g opacity="0.55">
+        <circle cx="340" cy="100" r="5" fill="#378ADD"/><text x="340" y="115" text-anchor="middle" font-size="8" fill="#185FA5" font-family="DM Sans, sans-serif">water</text>
+        <circle cx="340" cy="300" r="5" fill="#378ADD"/><text x="340" y="315" text-anchor="middle" font-size="8" fill="#185FA5" font-family="DM Sans, sans-serif">water</text>
+        <circle cx="340" cy="500" r="5" fill="#378ADD"/><text x="340" y="515" text-anchor="middle" font-size="8" fill="#185FA5" font-family="DM Sans, sans-serif">water</text>
+        <circle cx="640" cy="570" r="5" fill="#378ADD"/><text x="640" y="585" text-anchor="middle" font-size="8" fill="#185FA5" font-family="DM Sans, sans-serif">water</text>
+        <circle cx="920" cy="570" r="5" fill="#378ADD"/><text x="920" y="585" text-anchor="middle" font-size="8" fill="#185FA5" font-family="DM Sans, sans-serif">water</text>
+      </g>
+
+      <!-- Otter pops + Prize + Quest band -->
+      <rect x="55" y="375" width="100" height="34" rx="6" fill="#5DCAA5" opacity="0.2" stroke="#0F6E56" stroke-width="0.5"/>
+      <text x="105" y="396" text-anchor="middle" font-size="10" font-weight="600" fill="#085041" font-family="DM Sans, sans-serif">Otter pops</text>
+
+      <rect x="168" y="375" width="100" height="34" rx="6" fill="#EF9F27" opacity="0.2" stroke="#854F0B" stroke-width="0.5"/>
+      <text x="218" y="396" text-anchor="middle" font-size="10" font-weight="600" fill="#633806" font-family="DM Sans, sans-serif">Prize table</text>
+
+      <rect x="55" y="422" width="213" height="34" rx="6" fill="#888780" opacity="0.08" stroke="#5F5E5A" stroke-width="0.5"/>
+      <text x="161" y="443" text-anchor="middle" font-size="10" font-weight="500" fill="#5F5E5A" font-family="DM Sans, sans-serif">Quest band check-in / stickers</text>
+
+    </svg>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend-grid">
+    <div class="legend-chip"><span style="background:var(--bounce)"></span>Bounce houses</div>
+    <div class="legend-chip"><span style="background:var(--photo)"></span>Photo booth</div>
+    <div class="legend-chip"><span style="background:var(--obstacle)"></span>Obstacle course</div>
+    <div class="legend-chip"><span style="background:var(--water)"></span>Water fun</div>
+    <div class="legend-chip"><span style="background:var(--petting)"></span>Petting zoo</div>
+    <div class="legend-chip"><span style="background:var(--kickball)"></span>Kickball / soccer</div>
+    <div class="legend-chip"><span style="background:var(--creative)"></span>Creative station</div>
+    <div class="legend-chip"><span style="background:var(--dj)"></span>DJ / dance</div>
+    <div class="legend-chip"><span style="background:var(--relay)"></span>Relay games</div>
+  </div>
+</section>
+
+<!-- STATION LIST -->
+<section class="stations-list">
+  <h2>All stations</h2>
+  <div id="station-list"></div>
+</section>
+
+<!-- DETAIL OVERLAY -->
+<div class="detail-overlay" id="overlay" onclick="closeDetail(event)">
+  <div class="detail-card" onclick="event.stopPropagation()">
+    <div class="detail-handle"></div>
+    <div class="detail-header">
+      <div class="detail-num" id="d-num"></div>
+      <div class="detail-title" id="d-title"></div>
+    </div>
+    <div class="detail-location" id="d-location"></div>
+    <div class="detail-body" id="d-body"></div>
+    <div class="detail-meta" id="d-meta"></div>
+  </div>
+</div>
+
+<footer class="footer">
+  Draper Elementary PTA &middot; Field Day 2026<br>
+  Questions? Reach out to Sarah or Deanna
+</footer>
+
+<script>
+const DATA = {
+  1: {
+    title: "Bounce houses",
+    color: "#7F77DD",
+    location: "Back-left of grass field",
+    body: "Four inflatables: 40-foot obstacle course, 18-foot slide, bounce house, and a dunk tank. Custom Events provides staffing for the obstacle course and slide. Generators in the back corner keep cords out of foot traffic. Kids line up and rotate through — no time limit per bounce!",
+    volunteers: "2",
+    supplies: "None (vendor provides)",
+    sign: false
+  },
+  2: {
+    title: "Photo booth",
+    color: "#E24B4A",
+    location: "Blacktop, near school building",
+    body: "Professional photo booth by Booth 801 (4 hours, $800). Positioned near the school for shade and easy setup. Additional volunteer photographers with a Field Day backdrop nearby to reduce wait times. Great way to capture memories!",
+    volunteers: "2–4",
+    supplies: "Photo booth props/supplies",
+    sign: false
+  },
+  3: {
+    title: "Obstacle course",
+    color: "#D85A30",
+    location: "Right-center of grass field",
+    body: "Four parallel lanes for friendly competition on the open field. Equipment TBD — exploring rentals, borrowing from Amy's, school equipment, donations, and a potential Melissa Berry connection. Hand out ribbons for lane winners!",
+    volunteers: "2–4",
+    supplies: "Obstacle course equipment (borrow or rent), ribbons",
+    sign: true
+  },
+  4: {
+    title: "Water fun station",
+    color: "#378ADD",
+    location: "Front-left of grass field",
+    body: "Three water games on grass to prevent slipping:\n\n• Downpour Derby — relay where kids carry a cup of water on their head between buckets. Water spills = the fun part!\n• Drip Drop Splash — water version of duck duck goose with a soaked sponge.\n• Sponge Bucket Brigade — teams pass a soaked sponge overhead down the line.\n\nBackup game: bucket pong with basketballs. Reduce games if volunteers are short.",
+    volunteers: "1–3",
+    supplies: "Car wash sponges (6–10), solo cups, 5+ buckets, soap",
+    sign: true
+  },
+  5: {
+    title: "Petting zoo",
+    color: "#1D9E75",
+    location: "Back-right of grass field",
+    body: "Taylors' Traveling Troupe arrives at 8:15 AM to set up in the back corner with easy vehicle access through the field gate. Runs from 9:00 AM to 2:10 PM. Positioned away from the loudest stations so animals stay calm. Budget: ~$600.",
+    volunteers: "1–2",
+    supplies: "None (vendor provides)",
+    sign: false
+  },
+  6: {
+    title: "Kickball / soccer / capture the flag",
+    color: "#639922",
+    location: "Far right of grass field",
+    body: "Kids vote on what game to play! Volunteer tracks which game is most popular on a whiteboard. Game doesn't start until at least 6 kids are interested. Plenty of open running room on the far side of the field. Equipment from school.",
+    volunteers: "1",
+    supplies: "Kickballs, soccer balls (school equipment)",
+    sign: true
+  },
+  7: {
+    title: "Creative station",
+    color: "#6B4FA0",
+    location: "Blacktop, near school building",
+    body: "Multiple creative activities along the sidewalk edge:\n\n• T-shirt signing with markers\n• Temporary tattoos\n• Sidewalk chalk art (pavement is perfect!)\n• Big bubbles — think Cornbelly's bubble station!\n\nProximity to the building provides shade and table access.",
+    volunteers: "2–3",
+    supplies: "Temp tattoos, sidewalk chalk, markers, buckets for big bubbles, bubble solution",
+    sign: true
+  },
+  8: {
+    title: "DJ / dance party",
+    color: "#BA7517",
+    location: "Center of blacktop",
+    body: "The basketball court makes a natural dance floor! Sarah & Deanna are building a ~2-hour playlist. Each grade rotation gets two scheduled 15-minute dance party sessions (at the half-hour mark and 1:15 mark). Need to confirm Fano's equipment/computer will plug in.",
+    volunteers: "1–3",
+    supplies: "DJ equipment (Fano's?), computer/speaker setup",
+    sign: true
+  },
+  9: {
+    title: "Relay games",
+    color: "#D4537E",
+    location: "Center of grass field",
+    body: "Two crowd-favorite games with space for long relay lanes:\n\n• Dress-Up Relay — pile of oversized costumes at the far end, kids race to dress up and run back. Need costume donations!\n• Tug of War — class vs. class or grade vs. grade gets intense. Using Fano's rope.\n\nHighly visible from most of the field for great spectator energy!",
+    volunteers: "2–3",
+    supplies: "Dress-up costumes (donations), tug of war rope (Fano's)",
+    sign: true
+  }
+};
+
+// Build station list
+const listEl = document.getElementById('station-list');
+Object.entries(DATA).forEach(([id, s]) => {
+  const row = document.createElement('div');
+  row.className = 'station-row';
+  row.onclick = () => openDetail(Number(id));
+  row.innerHTML = `
+    <div class="row-num" style="background:${s.color}">${id}</div>
+    <div class="row-info">
+      <div class="row-name">${s.title}</div>
+      <div class="row-loc">${s.location}</div>
+    </div>
+    <div class="row-arrow">&#8250;</div>
+  `;
+  listEl.appendChild(row);
+});
+
+function openDetail(id) {
+  const s = DATA[id];
+  document.getElementById('d-num').style.background = s.color;
+  document.getElementById('d-num').textContent = id;
+  document.getElementById('d-title').textContent = s.title;
+  document.getElementById('d-location').textContent = s.location;
+  document.getElementById('d-body').innerHTML = s.body.replace(/\n/g, '<br>');
+
+  const metaHTML = `
+    <div class="meta-pill">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg>
+      ${s.volunteers} volunteer${s.volunteers === '1' ? '' : 's'}
+    </div>
+    ${s.sign ? '<div class="meta-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="14" rx="2"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/></svg>Sign needed</div>' : ''}
+  `;
+  document.getElementById('d-meta').innerHTML = metaHTML;
+
+  const overlay = document.getElementById('overlay');
+  overlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDetail(e) {
+  if (e.target === document.getElementById('overlay')) {
+    document.getElementById('overlay').classList.remove('active');
+    document.body.style.overflow = '';
+  }
+}
+
+// Close on escape key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.getElementById('overlay').classList.remove('active');
+    document.body.style.overflow = '';
+  }
+});
+</script>
+</body>
+</html>
