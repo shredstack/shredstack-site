@@ -11,6 +11,7 @@ const navLinks = [
   { href: "/projects", label: "Projects" },
   { href: "/blog", label: "Blog" },
   { href: "/playground", label: "Playground" },
+  { href: "/pta", label: "PTA" },
   { href: "/contact", label: "Contact" },
 ];
 
@@ -47,7 +48,7 @@ export function Navigation() {
                 key={link.href}
                 href={link.href}
                 className={`text-sm font-medium transition-colors ${
-                  pathname === link.href
+                  pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href))
                     ? "text-accent-400"
                     : "text-surface-300 hover:text-primary-400"
                 }`}
@@ -97,7 +98,7 @@ export function Navigation() {
                   key={link.href}
                   href={link.href}
                   className={`text-sm font-medium transition-colors ${
-                    pathname === link.href
+                    pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href))
                       ? "text-accent-400"
                       : "text-surface-300 hover:text-primary-400"
                   }`}
