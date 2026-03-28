@@ -118,6 +118,21 @@ export const projects: Project[] = [
     githubUrl: "https://github.com/shredstack/lightdrop",
   },
   {
+    id: "jersey-slime-studio",
+    name: "Jersey Slime Studio 38",
+    description:
+      "Pro bono website for an 11-year-old's slime business. Built to help customers discover experiences, book parties, and browse handcrafted slime — because every young entrepreneur deserves a real online presence.",
+    longDescription:
+      "A local mall business run by an 11-year-old entrepreneur had no web presence — customers couldn't find them on Google, book a time, or see what experiences were available. Built this full-featured website pro bono to change that. Features online booking for custom slime-making sessions, birthday party reservations, a browsable inventory of handcrafted slime varieties, an owner-managed blog, and an admin dashboard. Includes user authentication, contact forms, and SEO optimization to help the business get discovered.",
+    techStack: ["Next.js 14", "TypeScript", "Tailwind CSS", "Supabase", "React Hook Form", "Zod"],
+    category: "personal",
+    featured: true,
+    status: "Active",
+    gradient: "from-rainbow-pink to-rainbow-purple",
+    githubUrl: "https://github.com/shredstack/jersey-slime-website",
+    liveUrl: "https://www.jerseyslimestudio.com",
+  },
+  {
     id: "trip-craft",
     name: "TripCraft",
     description:
