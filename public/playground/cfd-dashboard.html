@@ -1,0 +1,1929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CFD Progress Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #e8e8f0;
+    --text-dim: #8888a0;
+    --rx: #22d68a;
+    --rx-dim: #22d68a33;
+    --scaled: #f97316;
+    --scaled-dim: #f9731633;
+    --accent: #6366f1;
+    --accent-dim: #6366f133;
+    --danger: #ef4444;
+    --warning: #eab308;
+    --font: 'DM Sans', sans-serif;
+    --mono: 'Space Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .noise {
+    position: fixed;
+    inset: 0;
+    opacity: 0.03;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    z-index: 999;
+  }
+
+  /* Upload zone */
+  .upload-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  .upload-screen .logo {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 0.5rem;
+  }
+
+  .upload-screen h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, var(--text), var(--rx));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+
+  .upload-screen .subtitle {
+    color: var(--text-dim);
+    font-size: 0.95rem;
+    margin-bottom: 2.5rem;
+    text-align: center;
+  }
+
+  .drop-zone {
+    width: 100%;
+    max-width: 520px;
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: var(--surface);
+    position: relative;
+  }
+
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--rx);
+    background: var(--surface2);
+  }
+
+  .drop-zone.dragover {
+    box-shadow: 0 0 40px var(--rx-dim);
+  }
+
+  .drop-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.6;
+  }
+
+  .drop-zone h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+  }
+
+  .drop-zone p {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+  }
+
+  .drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .upload-hint {
+    margin-top: 1.5rem;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    max-width: 420px;
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  .upload-hint code {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    background: var(--surface2);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  .error-msg {
+    color: var(--danger);
+    font-size: 0.85rem;
+    margin-top: 1rem;
+    display: none;
+  }
+
+  /* Dashboard (hidden until data loaded) */
+  .dashboard { display: none; }
+  .dashboard.active { display: block; }
+  .upload-screen.hidden { display: none; }
+
+  header {
+    padding: 3rem 2rem 2rem;
+    max-width: 1280px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 2rem;
+    right: 2rem;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 0.5rem;
+  }
+
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, var(--text), var(--rx));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 0.95rem;
+    margin-top: 0.3rem;
+  }
+
+  .container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  .reset-btn {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.4rem 0.8rem;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: absolute;
+    right: 2rem;
+    top: 3rem;
+  }
+
+  .reset-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* Stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.2rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent);
+    opacity: 0.5;
+  }
+
+  .stat-card.rx-card::before { background: var(--rx); }
+  .stat-card.scaled-card::before { background: var(--scaled); }
+
+  .stat-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 0.5rem;
+  }
+
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+  }
+
+  .stat-sub {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-top: 0.2rem;
+  }
+
+  .stat-trend {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 100px;
+    margin-top: 0.4rem;
+  }
+
+  .trend-up { background: var(--rx-dim); color: var(--rx); }
+  .trend-down { background: var(--scaled-dim); color: var(--scaled); }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 2rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+    overflow-x: auto;
+  }
+
+  .tab {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.8rem 1.2rem;
+    cursor: pointer;
+    color: var(--text-dim);
+    border: none;
+    background: none;
+    position: relative;
+    white-space: nowrap;
+    transition: color 0.2s;
+  }
+
+  .tab:hover { color: var(--text); }
+
+  .tab.active { color: var(--rx); }
+
+  .tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--rx);
+  }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .section-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .section-title .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--rx);
+  }
+
+  /* Chart area */
+  .chart-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    overflow-x: auto;
+  }
+
+  .bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 200px;
+    padding-top: 1rem;
+  }
+
+  .bar-group {
+    flex: 1;
+    min-width: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    height: 100%;
+    justify-content: flex-end;
+  }
+
+  .bar-stack {
+    width: 100%;
+    max-width: 36px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 1px;
+    position: relative;
+  }
+
+  .bar-rx {
+    background: var(--rx);
+    border-radius: 3px 3px 0 0;
+    min-height: 2px;
+    transition: all 0.3s;
+    cursor: pointer;
+  }
+
+  .bar-scaled {
+    background: var(--scaled);
+    border-radius: 0 0 3px 3px;
+    min-height: 2px;
+    transition: all 0.3s;
+    cursor: pointer;
+  }
+
+  .bar-rx:hover, .bar-scaled:hover { opacity: 0.8; }
+
+  .bar-label {
+    font-family: var(--mono);
+    font-size: 0.55rem;
+    color: var(--text-dim);
+    margin-top: 6px;
+    text-align: center;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    height: 50px;
+  }
+
+  .pct-label {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--rx);
+    margin-bottom: 4px;
+  }
+
+  /* Movement table */
+  .movement-grid {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .movement-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    display: grid;
+    grid-template-columns: 1fr 120px 160px;
+    align-items: center;
+    gap: 1rem;
+    transition: border-color 0.2s;
+    cursor: pointer;
+  }
+
+  .movement-row:hover { border-color: var(--accent); }
+
+  .movement-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+
+  .movement-counts {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    display: flex;
+    gap: 0.6rem;
+  }
+
+  .count-rx { color: var(--rx); }
+  .count-scaled { color: var(--scaled); }
+
+  .scale-bar-track {
+    height: 6px;
+    background: var(--rx-dim);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .scale-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+  }
+
+  .scale-pct {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+    text-align: right;
+  }
+
+  /* Lift cards */
+  .lift-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .lift-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.2rem;
+  }
+
+  .lift-name {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 0.3rem;
+  }
+
+  .lift-max {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .lift-max span {
+    font-size: 0.9rem;
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+
+  .lift-history {
+    margin-top: 0.8rem;
+    display: flex;
+    gap: 3px;
+    align-items: flex-end;
+    height: 40px;
+  }
+
+  .lift-dot {
+    flex: 1;
+    background: var(--accent);
+    border-radius: 2px;
+    min-height: 4px;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .lift-dot:hover { opacity: 1; }
+
+  .lift-dot .tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    white-space: nowrap;
+    z-index: 10;
+  }
+
+  .lift-dot:hover .tooltip { display: block; }
+
+  /* Next Move section */
+  .next-move {
+    background: linear-gradient(135deg, var(--surface), var(--surface2));
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .next-move::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--rx), var(--accent), var(--scaled));
+  }
+
+  .next-move h2 {
+    font-size: 1.4rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .next-move .description {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+    max-width: 700px;
+  }
+
+  .recommendation-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .rec-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.2rem;
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+
+  .rec-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  .rec-card.recommended {
+    border-color: var(--rx);
+    box-shadow: 0 0 20px var(--rx-dim);
+  }
+
+  .rec-badge {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 100px;
+    margin-bottom: 0.6rem;
+  }
+
+  .rec-card.recommended .rec-badge {
+    background: var(--rx-dim);
+    color: var(--rx);
+  }
+
+  .rec-card:not(.recommended) .rec-badge {
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  .rec-card h3 {
+    font-size: 1.05rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .rec-card p {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  .rec-card .rec-stats {
+    margin-top: 0.8rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .rec-card .rec-stats strong { color: var(--text); }
+
+  .expand-detail {
+    display: none;
+    margin-top: 0.8rem;
+    padding: 1rem;
+    background: var(--bg);
+    border-radius: 8px;
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    line-height: 1.7;
+  }
+
+  .expand-detail.show { display: block; }
+
+  .expand-detail h4 {
+    color: var(--text);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .expand-detail ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .expand-detail li {
+    padding: 0.2rem 0;
+    padding-left: 1rem;
+    position: relative;
+  }
+
+  .expand-detail li::before {
+    content: '\2192';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+  }
+
+  /* Recent log */
+  .log-table {
+    width: 100%;
+    font-size: 0.85rem;
+  }
+
+  .log-row {
+    display: grid;
+    grid-template-columns: 90px 70px 100px 1fr;
+    gap: 1rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+  }
+
+  .log-row:first-child {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .log-date {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--text-dim);
+  }
+
+  .log-div {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .log-div.rx { color: var(--rx); }
+  .log-div.scaled { color: var(--scaled); }
+
+  .log-score {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+  }
+
+  .log-desc {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .legend {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+    font-size: 0.8rem;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+  }
+
+  .filter-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .filter-btn {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.4rem 0.8rem;
+    border-radius: 100px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .filter-btn:hover { border-color: var(--text-dim); }
+  .filter-btn.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Loading */
+  .loading-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10,10,15,0.9);
+    z-index: 1000;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+  }
+
+  .loading-overlay.active { display: flex; }
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--rx);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--text-dim);
+  }
+
+  /* Save button */
+  .save-btn {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.4rem 0.8rem;
+    border-radius: 100px;
+    border: 1px solid var(--rx);
+    background: var(--rx-dim);
+    color: var(--rx);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: absolute;
+    right: 10rem;
+    top: 3rem;
+  }
+
+  .save-btn:hover { background: var(--rx); color: var(--bg); }
+
+  /* Save modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10,10,15,0.85);
+    z-index: 1001;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.active { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    max-width: 420px;
+    width: 90%;
+  }
+
+  .modal h2 {
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+    background: none;
+    -webkit-text-fill-color: var(--text);
+  }
+
+  .modal p {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-bottom: 1.2rem;
+    line-height: 1.5;
+  }
+
+  .modal input[type="text"] {
+    width: 100%;
+    padding: 0.7rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .modal input[type="text"]:focus { border-color: var(--rx); }
+
+  .modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+  }
+
+  .modal-cancel {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .modal-cancel:hover { border-color: var(--text-dim); color: var(--text); }
+
+  .modal-save {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.5rem 1.2rem;
+    border-radius: 8px;
+    border: 1px solid var(--rx);
+    background: var(--rx);
+    color: var(--bg);
+    cursor: pointer;
+    font-weight: 700;
+    transition: all 0.2s;
+  }
+
+  .modal-save:hover { opacity: 0.9; }
+  .modal-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .modal-error {
+    color: var(--danger);
+    font-size: 0.8rem;
+    margin-bottom: 0.8rem;
+    display: none;
+  }
+
+  .modal-success {
+    text-align: center;
+  }
+
+  .modal-success .link-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.7rem 1rem;
+    margin: 1rem 0;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--rx);
+    word-break: break-all;
+  }
+
+  .modal-success .link-box a {
+    color: var(--rx);
+    text-decoration: none;
+  }
+
+  .modal-success .link-box a:hover { text-decoration: underline; }
+
+  /* Saved banner */
+  .saved-banner {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0.6rem 2rem;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .saved-banner strong { color: var(--text); }
+
+  .saved-banner .create-own {
+    margin-left: auto;
+    color: var(--rx);
+    text-decoration: none;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .saved-banner .create-own:hover { text-decoration: underline; }
+
+  @media (max-width: 768px) {
+    header { padding: 2rem 1rem 1.5rem; }
+    .container { padding: 1rem; }
+    h1 { font-size: 1.6rem; }
+    .movement-row { grid-template-columns: 1fr; gap: 0.5rem; }
+    .log-row { grid-template-columns: 80px 60px 1fr; }
+    .log-desc { display: none; }
+    .bar-label { font-size: 0.45rem; }
+    .reset-btn { position: static; margin-top: 0.5rem; }
+    .save-btn { position: static; margin-top: 0.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="noise"></div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text">Crunching your data...</div>
+</div>
+
+<!-- Upload Screen -->
+<div class="upload-screen" id="upload-screen">
+  <div class="logo">CrossFit Dashboard /// PushPress Export</div>
+  <h1>CFD Progress Dashboard</h1>
+  <div class="subtitle">Upload your score export from Train by PushPress to see your personal insights.</div>
+
+  <div class="drop-zone" id="drop-zone">
+    <input type="file" accept=".csv" id="file-input" />
+    <div class="drop-icon">&#xe105;</div>
+    <h2>Drop your CSV here</h2>
+    <p>or click to browse</p>
+  </div>
+
+  <div class="upload-hint">
+    Export your scores from <code>train.pushpress.com</code> &rarr; Profile &rarr; Score History &rarr; Export.
+    Your data stays in your browser and is never uploaded anywhere.
+  </div>
+
+  <div class="error-msg" id="error-msg"></div>
+</div>
+
+<!-- Save Modal -->
+<div class="modal-overlay" id="save-modal">
+  <div class="modal">
+    <div id="save-form-view">
+      <h2>Save Dashboard</h2>
+      <p>Enter your name to save this dashboard at a shareable public URL. Anyone with the link can view it.</p>
+      <div class="modal-error" id="save-error"></div>
+      <input type="text" id="save-name" placeholder="Your name (e.g. Sarah)" maxlength="50" />
+      <div class="modal-actions">
+        <button class="modal-cancel" id="save-cancel">Cancel</button>
+        <button class="modal-save" id="save-confirm">Save</button>
+      </div>
+    </div>
+    <div id="save-success-view" class="modal-success" style="display:none">
+      <h2>Dashboard Saved!</h2>
+      <p>Your dashboard is now live at:</p>
+      <div class="link-box"><a id="save-link" href="#" target="_top"></a></div>
+      <div class="modal-actions" style="justify-content:center;margin-top:1rem">
+        <button class="modal-cancel" id="save-done">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard (hidden until data loaded) -->
+<div class="dashboard" id="dashboard">
+  <header>
+    <div class="logo">CrossFit Dashboard /// PushPress Export</div>
+    <h1>Your CFD Progress</h1>
+    <div class="subtitle" id="dash-subtitle"></div>
+    <button class="save-btn" id="save-btn">Save & Share</button>
+    <button class="reset-btn" id="reset-btn">Upload New File</button>
+  </header>
+
+  <div class="container">
+    <div class="stats-row" id="stats-row"></div>
+
+    <div class="tabs">
+      <button class="tab active" data-panel="overview">Overview</button>
+      <button class="tab" data-panel="movements">Movement Analysis</button>
+      <button class="tab" data-panel="lifts">Lift Progression</button>
+      <button class="tab" data-panel="nextmove">Next Rx Move</button>
+      <button class="tab" data-panel="log">Recent Log</button>
+    </div>
+
+    <div class="panel active" id="overview">
+      <div class="section-title"><span class="dot"></span> Rx Rate Over Time</div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--rx)"></div> Rx</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--scaled)"></div> Scaled</div>
+      </div>
+      <div class="chart-container">
+        <div class="bar-chart" id="monthly-chart"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="movements">
+      <div class="section-title"><span class="dot"></span> Movement Scaling Breakdown</div>
+      <p style="color:var(--text-dim);font-size:0.85rem;margin-bottom:1.2rem;">Movements sorted by how often you scale them. Click a row for details.</p>
+      <div class="filter-row">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="high">High Scale (80%+)</button>
+        <button class="filter-btn" data-filter="mid">Mid Scale (40-79%)</button>
+        <button class="filter-btn" data-filter="low">Low Scale (&lt;40%)</button>
+      </div>
+      <div class="movement-grid" id="movement-grid"></div>
+    </div>
+
+    <div class="panel" id="lifts">
+      <div class="section-title"><span class="dot"></span> Strength Progression</div>
+      <div class="lift-grid" id="lift-grid"></div>
+    </div>
+
+    <div class="panel" id="nextmove">
+      <div class="next-move">
+        <h2>What Should You Work On Next?</h2>
+        <div class="description">
+          Based on your scaling patterns and frequency of exposure, here are prioritized recommendations for which Rx movements to focus on. The goal: unlock the biggest leaderboard impact with the most achievable progression path.
+        </div>
+        <div class="recommendation-cards" id="rec-cards"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="log">
+      <div class="section-title"><span class="dot"></span> Recent Workouts</div>
+      <div class="filter-row">
+        <button class="filter-btn active" data-logfilter="all">All</button>
+        <button class="filter-btn" data-logfilter="Rx">Rx Only</button>
+        <button class="filter-btn" data-logfilter="Scaled">Scaled Only</button>
+      </div>
+      <div id="log-table"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CSV PARSER — handles multiline quoted fields from PushPress
+// ============================================================
+function parseCSV(text) {
+  const rows = [];
+  let i = 0;
+  const len = text.length;
+
+  function parseField() {
+    if (i >= len) return '';
+    if (text[i] === '"') {
+      i++; // skip opening quote
+      let field = '';
+      while (i < len) {
+        if (text[i] === '"') {
+          if (i + 1 < len && text[i + 1] === '"') {
+            field += '"';
+            i += 2;
+          } else {
+            i++; // skip closing quote
+            break;
+          }
+        } else {
+          field += text[i];
+          i++;
+        }
+      }
+      return field;
+    } else {
+      let field = '';
+      while (i < len && text[i] !== ',' && text[i] !== '\n' && text[i] !== '\r') {
+        field += text[i];
+        i++;
+      }
+      return field;
+    }
+  }
+
+  // Skip BOM if present
+  if (text.charCodeAt(0) === 0xFEFF) i = 1;
+
+  while (i < len) {
+    const row = [];
+    while (true) {
+      row.push(parseField());
+      if (i < len && text[i] === ',') {
+        i++; // skip comma
+        continue;
+      }
+      // end of row
+      if (i < len && text[i] === '\r') i++;
+      if (i < len && text[i] === '\n') i++;
+      break;
+    }
+    if (row.length > 1 || (row.length === 1 && row[0].trim() !== '')) {
+      rows.push(row);
+    }
+  }
+  return rows;
+}
+
+// ============================================================
+// MOVEMENT DETECTION — keyword matching on workout descriptions
+// ============================================================
+const MOVEMENT_PATTERNS = [
+  { name: 'Pull-Ups', pattern: /\bpull-?ups?\b/i, exclude: /\bchest-to-bar\b|C2B|strict ring|ring pull/i },
+  { name: 'Chest-to-Bar', pattern: /\bchest-to-bar\b|C2B pull/i },
+  { name: 'Bar Muscle-Ups', pattern: /\bbar muscle-?ups?\b/i },
+  { name: 'Ring Muscle-Ups', pattern: /\bring muscle-?ups?\b/i },
+  { name: 'Muscle-Ups', pattern: /\bmuscle-?ups?\b/i, exclude: /\b(bar|ring) muscle/i },
+  { name: 'Handstand Push-Ups', pattern: /\bhandstand push-?ups?\b|\bHSPU\b/i },
+  { name: 'Push-Ups', pattern: /\bpush-?ups?\b/i, exclude: /handstand push|hand-release push/i },
+  { name: 'Hand-Release Push-Ups', pattern: /\bhand-?release push-?ups?\b/i },
+  { name: 'Toes-to-Bar', pattern: /\btoes-?to-?bars?\b|\bT2B\b|toes-to-bar/i },
+  { name: 'Knees-to-Elbows', pattern: /\bknees-?to-?elbows?\b|\bK2E\b/i },
+  { name: 'Double-Unders', pattern: /\bdouble-?unders?\b|\bDU\b/i },
+  { name: 'Rope Climbs', pattern: /\brope climbs?\b/i },
+  { name: 'Wall Walks', pattern: /\bwall walks?\b/i },
+  { name: 'Wall Balls', pattern: /\bwall-?ball\b/i },
+  { name: 'Box Jumps', pattern: /\bbox jump|box step/i },
+  { name: 'Burpees', pattern: /\bburpees?\b/i },
+  { name: 'Pistols', pattern: /\bpistols?\b/i },
+  { name: 'Overhead Squats', pattern: /\boverhead squats?\b|\bOHS\b/i },
+  { name: 'Thrusters', pattern: /\bthrusters?\b/i },
+  { name: 'Deadlifts', pattern: /\bdeadlifts?\b/i, exclude: /sumo|Romanian|RDL|good morning/i },
+  { name: 'Cleans', pattern: /\bcleans?\b/i, exclude: /clean and jerk|hang.*clean|power clean|squat clean/i },
+  { name: 'Power Cleans', pattern: /\bpower cleans?\b/i },
+  { name: 'Squat Cleans', pattern: /\bsquat cleans?\b/i },
+  { name: 'Snatches', pattern: /\bsnatches?\b|\bsnatch\b/i, exclude: /power snatch|hang.*snatch|squat snatch/i },
+  { name: 'Power Snatches', pattern: /\bpower snatches?\b|\bpower snatch\b/i },
+  { name: 'Clean & Jerk', pattern: /\bclean and jerks?\b|\bclean & jerk/i },
+  { name: 'Running', pattern: /\brun\b|\bruns\b|\brunning\b/i, exclude: /shuttle run/i },
+  { name: 'Rowing', pattern: /\brow\b|\brows?\b|\browing\b/i, exclude: /upright row/i },
+  { name: 'Air Bike', pattern: /\bair bike\b|\becho bike\b|\bassault bike\b/i },
+];
+
+// Lift detection for "For load" workouts
+const LIFT_PATTERNS = [
+  { name: 'Back Squat', pattern: /\bback squats?\b/i },
+  { name: 'Front Squat', pattern: /\bfront squats?\b/i },
+  { name: 'Deadlift', pattern: /\bdeadlifts?\b/i },
+  { name: 'Bench Press', pattern: /\bbench press\b/i },
+  { name: 'Shoulder Press', pattern: /\bshoulder press\b|\bstrict press\b/i },
+  { name: 'Push Press', pattern: /\bpush press\b/i },
+  { name: 'Push Jerk', pattern: /\bpush jerks?\b/i },
+  { name: 'Split Jerk', pattern: /\bsplit jerks?\b/i },
+  { name: 'Power Clean', pattern: /\bpower cleans?\b/i },
+  { name: 'Squat Clean', pattern: /\bsquat cleans?\b/i },
+  { name: 'Clean & Jerk', pattern: /\bclean and jerks?\b|\bclean & jerk/i },
+  { name: 'Snatch', pattern: /\bsnatch\b/i, exclude: /power snatch|hang.*snatch/i },
+  { name: 'Power Snatch', pattern: /\bpower snatches?\b|\bpower snatch\b|\bhang power snatch\b/i },
+  { name: 'Hang Squat Snatch', pattern: /\bhang squat snatch\b/i },
+];
+
+function detectMovements(desc) {
+  const found = [];
+  for (const m of MOVEMENT_PATTERNS) {
+    if (m.pattern.test(desc)) {
+      if (m.exclude && m.exclude.test(desc)) continue;
+      found.push(m.name);
+    }
+  }
+  return found;
+}
+
+function detectLift(desc, score) {
+  // Only count as a lift if the score looks like a load ("N @ W" or the description says "For load")
+  const isLoadWorkout = /for load/i.test(desc) || /build.*load/i.test(desc) || /\d+\s*@\s*\d+/.test(score);
+  if (!isLoadWorkout) return null;
+
+  for (const l of LIFT_PATTERNS) {
+    if (l.pattern.test(desc)) {
+      if (l.exclude && l.exclude.test(desc)) continue;
+      // Parse weight from score
+      const wMatch = score.match(/(\d+)\s*@\s*(\d+\.?\d*)/);
+      if (wMatch) {
+        return { lift: l.name, reps: parseInt(wMatch[1]), weight: parseFloat(wMatch[2]) };
+      }
+    }
+  }
+  return null;
+}
+
+
+// ============================================================
+// DATA PROCESSING — turn raw CSV rows into dashboard data
+// ============================================================
+function processData(rows) {
+  // Skip header row
+  const header = rows[0];
+  const dataRows = rows.slice(1);
+
+  const workouts = [];
+  const seen = new Set(); // dedup key
+
+  for (const row of dataRows) {
+    if (row.length < 5) continue;
+    const title = (row[0] || '').trim();
+    const desc = (row[1] || '').trim();
+    const score = (row[2] || '').trim();
+    const division = (row[3] || '').trim();
+    const dateStr = (row[4] || '').trim();
+
+    if (!desc && !score) continue;
+    if (!dateStr) continue;
+
+    // Parse date
+    const dMatch = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (!dMatch) continue;
+    const month = dMatch[1].padStart(2, '0');
+    const day = dMatch[2].padStart(2, '0');
+    const year = dMatch[3];
+    const isoDate = `${year}-${month}-${day}`;
+    const monthKey = `${year}-${month}`;
+
+    // Normalize division
+    let div = 'Other';
+    if (/^rx$/i.test(division)) div = 'Rx';
+    else if (/^scaled$/i.test(division)) div = 'Scaled';
+    else if (division === 'null' || !division) div = 'Other';
+
+    // Skip "Other" from main analysis (challenges, etc.)
+    // but keep in log
+
+    // Dedup: same date + score + first 50 chars of desc
+    const dedupKey = `${isoDate}|${score}|${desc.slice(0, 50)}`;
+    if (seen.has(dedupKey)) continue;
+    seen.add(dedupKey);
+
+    workouts.push({ title, desc, score, div, date: isoDate, monthKey });
+  }
+
+  // Sort by date
+  workouts.sort((a, b) => a.date.localeCompare(b.date));
+
+  // Filter to WODs (Rx or Scaled) for main analysis
+  const wods = workouts.filter(w => w.div === 'Rx' || w.div === 'Scaled');
+
+  // --- Summary ---
+  const totalWorkouts = wods.length;
+  const rxCount = wods.filter(w => w.div === 'Rx').length;
+  const scaledCount = wods.filter(w => w.div === 'Scaled').length;
+  const dateRange = wods.length > 0
+    ? `${wods[0].date} to ${wods[wods.length - 1].date}`
+    : 'N/A';
+
+  // --- Monthly ---
+  const monthlyMap = {};
+  for (const w of wods) {
+    if (!monthlyMap[w.monthKey]) monthlyMap[w.monthKey] = { rx: 0, scaled: 0 };
+    if (w.div === 'Rx') monthlyMap[w.monthKey].rx++;
+    else monthlyMap[w.monthKey].scaled++;
+  }
+
+  const sortedMonths = Object.keys(monthlyMap).sort();
+  const monthly = sortedMonths.map(m => {
+    const d = monthlyMap[m];
+    const total = d.rx + d.scaled;
+    return { month: m, rx: d.rx, scaled: d.scaled, total, rxPct: total > 0 ? Math.round(d.rx / total * 100) : 0 };
+  });
+
+  const currentRxPct = monthly.length > 0 ? monthly[monthly.length - 1].rxPct : 0;
+  const startRxPct = monthly.length > 0 ? monthly[0].rxPct : 0;
+
+  // --- Movement analysis ---
+  const movementData = {};
+  for (const w of wods) {
+    const moves = detectMovements(w.desc);
+    for (const name of moves) {
+      if (!movementData[name]) movementData[name] = { rx: 0, scaled: 0, total: 0, firstRx: null, lastRx: null };
+      movementData[name].total++;
+      if (w.div === 'Rx') {
+        movementData[name].rx++;
+        if (!movementData[name].firstRx || w.date < movementData[name].firstRx) movementData[name].firstRx = w.date;
+        if (!movementData[name].lastRx || w.date > movementData[name].lastRx) movementData[name].lastRx = w.date;
+      } else {
+        movementData[name].scaled++;
+      }
+    }
+  }
+
+  const movements = Object.entries(movementData)
+    .filter(([, d]) => d.total >= 3) // only show movements with 3+ appearances
+    .map(([name, d]) => ({
+      name,
+      rx: d.rx,
+      scaled: d.scaled,
+      total: d.total,
+      scalePct: Math.round(d.scaled / d.total * 100),
+      first_rx: d.firstRx,
+      last_rx: d.lastRx,
+    }))
+    .sort((a, b) => b.scalePct - a.scalePct || b.total - a.total);
+
+  // --- Lift data ---
+  const lifts = [];
+  for (const w of wods) {
+    const lift = detectLift(w.desc, w.score);
+    if (lift) {
+      lifts.push({ date: w.date, lift: lift.lift, reps: lift.reps, weight: lift.weight, division: w.div });
+    }
+  }
+  lifts.sort((a, b) => a.date.localeCompare(b.date));
+
+  // --- Recent workouts (all including Other) ---
+  const recentWorkouts = workouts
+    .filter(w => w.div === 'Rx' || w.div === 'Scaled')
+    .slice(-100)
+    .reverse()
+    .map(w => ({
+      d: w.date,
+      div: w.div,
+      s: w.score,
+      desc: (w.desc || '').replace(/\n/g, ' ').slice(0, 120),
+    }));
+
+  return {
+    summary: { totalWorkouts, rxCount, scaledCount, dateRange, currentRxPct, startRxPct },
+    monthly,
+    movements,
+    lifts,
+    recentWorkouts,
+  };
+}
+
+
+// ============================================================
+// RENDERING
+// ============================================================
+let DATA = null;
+
+function renderStats() {
+  const s = DATA.summary;
+  const recent3 = DATA.monthly.slice(-3);
+  const prev3 = DATA.monthly.slice(-6, -3);
+  const recentAvg = recent3.length > 0 ? Math.round(recent3.reduce((a, m) => a + m.rxPct, 0) / recent3.length) : 0;
+  const prevAvg = prev3.length > 0 ? Math.round(prev3.reduce((a, m) => a + m.rxPct, 0) / prev3.length) : 0;
+  const trend = recentAvg - prevAvg;
+
+  const dates = s.dateRange.split(' to ');
+  const startLabel = dates[0] ? formatMonthLabel(dates[0].slice(0, 7)) : '';
+  const endLabel = dates[1] ? formatMonthLabel(dates[1].slice(0, 7)) : '';
+
+  document.getElementById('dash-subtitle').textContent =
+    `${startLabel} \u2013 ${endLabel} \u00B7 ${s.totalWorkouts} logged workouts`;
+
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-card rx-card">
+      <div class="stat-label">Rx Rate (Current)</div>
+      <div class="stat-value" style="color:var(--rx)">${s.currentRxPct}%</div>
+      <div class="stat-sub">Latest month</div>
+      ${DATA.monthly.length >= 6 ? `<div class="stat-trend ${trend >= 0 ? 'trend-up' : 'trend-down'}">${trend >= 0 ? '\u2191' : '\u2193'} ${Math.abs(trend)}% vs prior quarter</div>` : ''}
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Workouts</div>
+      <div class="stat-value">${s.totalWorkouts}</div>
+      <div class="stat-sub">Since ${startLabel}</div>
+    </div>
+    <div class="stat-card rx-card">
+      <div class="stat-label">Rx Workouts</div>
+      <div class="stat-value" style="color:var(--rx)">${s.rxCount}</div>
+      <div class="stat-sub">${s.totalWorkouts > 0 ? Math.round(s.rxCount / s.totalWorkouts * 100) : 0}% of total</div>
+    </div>
+    <div class="stat-card scaled-card">
+      <div class="stat-label">Scaled Workouts</div>
+      <div class="stat-value" style="color:var(--scaled)">${s.scaledCount}</div>
+      <div class="stat-sub">${s.totalWorkouts > 0 ? Math.round(s.scaledCount / s.totalWorkouts * 100) : 0}% of total</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Growth</div>
+      <div class="stat-value" style="color:var(--accent)">${s.currentRxPct - s.startRxPct >= 0 ? '+' : ''}${s.currentRxPct - s.startRxPct}%</div>
+      <div class="stat-sub">Rx rate change</div>
+    </div>
+  `;
+}
+
+function formatMonthLabel(ym) {
+  const [y, m] = ym.split('-');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[parseInt(m) - 1]} ${y}`;
+}
+
+function renderChart() {
+  const maxTotal = Math.max(...DATA.monthly.map(m => m.total));
+  const chart = document.getElementById('monthly-chart');
+  chart.innerHTML = DATA.monthly.map(m => {
+    const rxH = Math.max(2, (m.rx / maxTotal) * 160);
+    const scH = Math.max(2, (m.scaled / maxTotal) * 160);
+    const label = m.month.replace('20', '').replace('-', '/');
+    return `
+      <div class="bar-group">
+        <div class="pct-label">${m.rxPct}%</div>
+        <div class="bar-stack">
+          <div class="bar-rx" style="height:${rxH}px" title="Rx: ${m.rx}"></div>
+          <div class="bar-scaled" style="height:${scH}px" title="Scaled: ${m.scaled}"></div>
+        </div>
+        <div class="bar-label">${label}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderMovements(filter) {
+  filter = filter || 'all';
+  const grid = document.getElementById('movement-grid');
+  let filtered = DATA.movements;
+  if (filter === 'high') filtered = filtered.filter(m => m.scalePct >= 80);
+  else if (filter === 'mid') filtered = filtered.filter(m => m.scalePct >= 40 && m.scalePct < 80);
+  else if (filter === 'low') filtered = filtered.filter(m => m.scalePct < 40);
+
+  if (filtered.length === 0) {
+    grid.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem;">No movements in this category.</p>';
+    return;
+  }
+
+  grid.innerHTML = filtered.map(m => {
+    const barColor = m.scalePct >= 80 ? 'var(--danger)' : m.scalePct >= 60 ? 'var(--scaled)' : 'var(--rx)';
+    const rxNote = m.first_rx ? `First Rx: ${m.first_rx}` : 'Never done Rx';
+    return `
+      <div class="movement-row" onclick="this.querySelector('.expand-detail').classList.toggle('show')">
+        <div>
+          <div class="movement-name">${m.name}</div>
+          <div style="font-size:0.72rem;color:var(--text-dim);margin-top:2px">${rxNote}</div>
+        </div>
+        <div class="movement-counts">
+          <span class="count-rx">${m.rx} Rx</span>
+          <span class="count-scaled">${m.scaled} Sc</span>
+        </div>
+        <div>
+          <div class="scale-bar-track">
+            <div class="scale-bar-fill" style="width:${m.scalePct}%;background:${barColor}"></div>
+          </div>
+          <div class="scale-pct">${m.scalePct}% scaled</div>
+        </div>
+        <div class="expand-detail" style="grid-column:1/-1">
+          <p>Out of <strong>${m.total}</strong> workouts with ${m.name}, you did <strong style="color:var(--rx)">${m.rx} Rx</strong> and <strong style="color:var(--scaled)">${m.scaled} Scaled</strong>.</p>
+          ${m.first_rx ? `<p style="margin-top:0.3rem">Your Rx range: <strong>${m.first_rx}</strong> to <strong>${m.last_rx}</strong></p>` : '<p style="margin-top:0.3rem;color:var(--danger)">You have never completed this movement Rx in a WOD.</p>'}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderLifts() {
+  const liftMap = {};
+  DATA.lifts.forEach(l => {
+    if (!liftMap[l.lift]) liftMap[l.lift] = [];
+    liftMap[l.lift].push(l);
+  });
+
+  const grid = document.getElementById('lift-grid');
+
+  if (Object.keys(liftMap).length === 0) {
+    grid.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem;">No lift progression data found. Lift data is extracted from "For load" workouts with scores in the format "reps @ weight".</p>';
+    return;
+  }
+
+  grid.innerHTML = Object.entries(liftMap).sort((a, b) => b[1].length - a[1].length).map(([name, entries]) => {
+    entries.sort((a, b) => a.date.localeCompare(b.date));
+    const max = Math.max(...entries.map(e => e.weight));
+    const maxEntry = entries.find(e => e.weight === max);
+    const minW = Math.min(...entries.map(e => e.weight));
+    const range = max - minW || 1;
+
+    const bars = entries.map(e => {
+      const h = Math.max(4, ((e.weight - minW) / range) * 36);
+      return `<div class="lift-dot" style="height:${h}px"><div class="tooltip">${e.date}<br>${e.weight} lbs x ${e.reps}</div></div>`;
+    }).join('');
+
+    return `
+      <div class="lift-card">
+        <div class="lift-name">${name}</div>
+        <div class="lift-max">${max}<span> lbs</span></div>
+        <div style="font-size:0.75rem;color:var(--text-dim)">${maxEntry.reps} rep${maxEntry.reps > 1 ? 's' : ''} on ${maxEntry.date}</div>
+        <div class="lift-history">${bars}</div>
+        <div style="font-family:var(--mono);font-size:0.6rem;color:var(--text-dim);margin-top:4px;display:flex;justify-content:space-between">
+          <span>${entries[0].date}</span><span>${entries[entries.length - 1].date}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderRecommendations() {
+  const cards = document.getElementById('rec-cards');
+  const moves = DATA.movements;
+
+  if (moves.length === 0) {
+    cards.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem;">Not enough data to generate recommendations.</p>';
+    return;
+  }
+
+  // Score movements: high scale % + high frequency = high impact
+  // Prioritize ones where the athlete has SOME Rx experience (more achievable)
+  const scored = moves
+    .filter(m => m.scalePct >= 40) // only recommend things they actually scale
+    .map(m => {
+      const hasRxExp = m.rx > 0;
+      // Impact = frequency * scale rate. Boost if they've done it Rx before (more achievable).
+      const impactScore = m.total * (m.scalePct / 100) * (hasRxExp ? 1.5 : 1.0);
+      return { ...m, impactScore, hasRxExp };
+    })
+    .sort((a, b) => b.impactScore - a.impactScore)
+    .slice(0, 4);
+
+  if (scored.length === 0) {
+    cards.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem;">Great work! You have very low scaling rates across the board.</p>';
+    return;
+  }
+
+  const labels = ['#1 Recommended', '#2 High Impact', '#3 Worth Focusing', 'Also Consider'];
+
+  cards.innerHTML = scored.map((m, i) => {
+    const isTop = i === 0;
+    const rxInfo = m.hasRxExp
+      ? `You've done ${m.name} Rx in <strong>${m.rx}</strong> WOD${m.rx > 1 ? 's' : ''}, proving you can do it. Focus on consistency to convert more workouts from Scaled to Rx.`
+      : `You haven't done ${m.name} Rx yet across ${m.total} appearances. This is a high-impact skill to unlock.`;
+
+    return `
+      <div class="rec-card ${isTop ? 'recommended' : ''}" onclick="this.querySelector('.expand-detail').classList.toggle('show')">
+        <div class="rec-badge">${labels[i]}</div>
+        <h3>${m.name}</h3>
+        <p>${rxInfo}</p>
+        <div class="rec-stats">
+          <span>Appears in <strong>${m.total}</strong> WODs</span>
+          <span>Scaled <strong>${m.scalePct}%</strong></span>
+          <span>${m.hasRxExp ? `Rx'd <strong>${m.rx}x</strong>` : 'Never Rx\'d'}</span>
+        </div>
+        <div class="expand-detail">
+          <h4>Details</h4>
+          <ul>
+            <li>Appears in ${m.total} workouts total (${m.rx} Rx, ${m.scaled} Scaled)</li>
+            ${m.first_rx ? `<li>First Rx: ${m.first_rx} | Last Rx: ${m.last_rx}</li>` : '<li>No Rx attempts logged yet</li>'}
+            <li>Converting this movement to Rx could shift ~${Math.round(m.scaled * 0.5)}-${m.scaled} workouts from Scaled to Rx</li>
+          </ul>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderLog(filter) {
+  filter = filter || 'all';
+  const table = document.getElementById('log-table');
+  let wods = DATA.recentWorkouts;
+  if (filter !== 'all') wods = wods.filter(w => w.div === filter);
+
+  if (wods.length === 0) {
+    table.innerHTML = '<p style="color:var(--text-dim);font-size:0.85rem;">No workouts to show.</p>';
+    return;
+  }
+
+  table.innerHTML = `
+    <div class="log-row"><span>Date</span><span>Division</span><span>Score</span><span>Workout</span></div>
+    ${wods.map(w => `
+      <div class="log-row">
+        <span class="log-date">${w.d.slice(5)}</span>
+        <span class="log-div ${w.div.toLowerCase()}">${w.div}</span>
+        <span class="log-score">${w.s}</span>
+        <span class="log-desc">${w.desc}</span>
+      </div>
+    `).join('')}
+  `;
+}
+
+
+// ============================================================
+// EVENT HANDLING
+// ============================================================
+function showDashboard() {
+  document.getElementById('upload-screen').classList.add('hidden');
+  document.getElementById('dashboard').classList.add('active');
+  document.getElementById('loading').classList.remove('active');
+
+  renderStats();
+  renderChart();
+  renderMovements();
+  renderLifts();
+  renderRecommendations();
+  renderLog();
+
+  // Bind tabs
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.panel).classList.add('active');
+    });
+  });
+
+  // Bind movement filters
+  document.querySelectorAll('[data-filter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-filter]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderMovements(btn.dataset.filter);
+    });
+  });
+
+  // Bind log filters
+  document.querySelectorAll('[data-logfilter]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-logfilter]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderLog(btn.dataset.logfilter);
+    });
+  });
+}
+
+function handleFile(file) {
+  if (!file || !file.name.toLowerCase().endsWith('.csv')) {
+    showError('Please upload a .csv file.');
+    return;
+  }
+
+  document.getElementById('loading').classList.add('active');
+  document.getElementById('error-msg').style.display = 'none';
+
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      const text = e.target.result;
+      const rows = parseCSV(text);
+
+      if (rows.length < 2) {
+        showError('The CSV file appears to be empty or malformed.');
+        document.getElementById('loading').classList.remove('active');
+        return;
+      }
+
+      // Validate header
+      const header = rows[0].map(h => h.trim().toLowerCase());
+      if (!header.includes('workout description') && !header.includes('score') && !header.includes('division')) {
+        showError('This doesn\'t look like a PushPress score export. Expected columns: Workout Title, Workout Description, Score, Division, Date Time.');
+        document.getElementById('loading').classList.remove('active');
+        return;
+      }
+
+      DATA = processData(rows);
+
+      if (DATA.summary.totalWorkouts === 0) {
+        showError('No workout data found in the CSV. Make sure you\'re uploading a PushPress score export.');
+        document.getElementById('loading').classList.remove('active');
+        return;
+      }
+
+      // Small delay for visual feedback
+      setTimeout(showDashboard, 400);
+    } catch (err) {
+      showError('Error processing file: ' + err.message);
+      document.getElementById('loading').classList.remove('active');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+// File input
+document.getElementById('file-input').addEventListener('change', function (e) {
+  if (e.target.files.length > 0) handleFile(e.target.files[0]);
+});
+
+// Drag and drop
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', function (e) {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', function () {
+  dropZone.classList.remove('dragover');
+});
+dropZone.addEventListener('drop', function (e) {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+});
+
+// Reset button
+document.getElementById('reset-btn').addEventListener('click', function () {
+  document.getElementById('dashboard').classList.remove('active');
+  document.getElementById('upload-screen').classList.remove('hidden');
+  document.getElementById('file-input').value = '';
+  DATA = null;
+});
+
+// ============================================================
+// SAVE & SHARE
+// ============================================================
+document.getElementById('save-btn').addEventListener('click', function () {
+  document.getElementById('save-modal').classList.add('active');
+  document.getElementById('save-form-view').style.display = '';
+  document.getElementById('save-success-view').style.display = 'none';
+  document.getElementById('save-error').style.display = 'none';
+  document.getElementById('save-name').value = '';
+  document.getElementById('save-name').focus();
+});
+
+document.getElementById('save-cancel').addEventListener('click', function () {
+  document.getElementById('save-modal').classList.remove('active');
+});
+
+document.getElementById('save-done').addEventListener('click', function () {
+  document.getElementById('save-modal').classList.remove('active');
+});
+
+document.getElementById('save-confirm').addEventListener('click', async function () {
+  const name = document.getElementById('save-name').value.trim();
+  if (!name) {
+    document.getElementById('save-error').textContent = 'Please enter your name.';
+    document.getElementById('save-error').style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('save-confirm');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  document.getElementById('save-error').style.display = 'none';
+
+  try {
+    const resp = await fetch('/api/cfd-dashboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, data: JSON.stringify(DATA) }),
+    });
+
+    const result = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(result.error || 'Failed to save');
+    }
+
+    // Show success
+    const dashUrl = `${window.location.origin}/playground/cfd-dashboard/${result.slug}`;
+    document.getElementById('save-link').href = dashUrl;
+    document.getElementById('save-link').textContent = dashUrl;
+    document.getElementById('save-form-view').style.display = 'none';
+    document.getElementById('save-success-view').style.display = '';
+  } catch (err) {
+    document.getElementById('save-error').textContent = err.message;
+    document.getElementById('save-error').style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save';
+  }
+});
+
+// Allow Enter key in name input
+document.getElementById('save-name').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') document.getElementById('save-confirm').click();
+});
+
+// ============================================================
+// LOAD SAVED DASHBOARD FROM URL
+// ============================================================
+(async function checkForSaved() {
+  const params = new URLSearchParams(window.location.search);
+  const slug = params.get('saved');
+  if (!slug) return;
+
+  // This is a saved dashboard view
+  document.getElementById('loading').classList.add('active');
+
+  try {
+    const resp = await fetch(`/api/cfd-dashboard/${encodeURIComponent(slug)}`);
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || 'Dashboard not found');
+    }
+
+    const record = await resp.json();
+    DATA = JSON.parse(record.data);
+
+    // Hide upload, show dashboard
+    document.getElementById('upload-screen').classList.add('hidden');
+    document.getElementById('dashboard').classList.add('active');
+
+    // Hide save & reset buttons for saved view, add a banner instead
+    document.getElementById('save-btn').style.display = 'none';
+    document.getElementById('reset-btn').style.display = 'none';
+
+    // Add saved banner
+    const banner = document.createElement('div');
+    banner.className = 'saved-banner';
+    banner.innerHTML = `Viewing <strong>${record.displayName}</strong>'s dashboard <a class="create-own" href="/playground/cfd-dashboard">Create Your Own</a>`;
+    document.getElementById('dashboard').prepend(banner);
+
+    renderStats();
+    renderChart();
+    renderMovements();
+    renderLifts();
+    renderRecommendations();
+    renderLog();
+
+    // Bind tabs and filters for saved view
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.panel).classList.add('active');
+      });
+    });
+    document.querySelectorAll('[data-filter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-filter]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderMovements(btn.dataset.filter);
+      });
+    });
+    document.querySelectorAll('[data-logfilter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-logfilter]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderLog(btn.dataset.logfilter);
+      });
+    });
+
+    document.getElementById('loading').classList.remove('active');
+  } catch (err) {
+    document.getElementById('loading').classList.remove('active');
+    document.getElementById('upload-screen').classList.remove('hidden');
+    showError('Could not load saved dashboard: ' + err.message);
+  }
+})();
+</script>
+</body>
+</html>

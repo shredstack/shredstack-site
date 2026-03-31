@@ -1,9 +1,21 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Playground",
   description: "Interactive experiments, demos, and data visualizations.",
 };
+
+const liveExperiments = [
+  {
+    name: "CFD Progress Dashboard",
+    description:
+      "Upload your PushPress score export and get personal CrossFit insights — Rx trends, movement analysis, lift progression, and more.",
+    icon: "🏋️",
+    gradient: "from-rainbow-green to-rainbow-cyan",
+    href: "/playground/cfd-dashboard",
+  },
+];
 
 const upcomingExperiments = [
   {
@@ -40,34 +52,42 @@ export default function PlaygroundPage() {
           </p>
         </div>
 
-        {/* Under Construction */}
-        <div className="mb-12 p-8 card relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-rainbow-soft opacity-30" />
-          <div className="text-center relative z-10">
-            <div className="inline-block p-4 bg-surface-800 rounded-full mb-4 border border-surface-700">
-              <svg
-                className="w-12 h-12 text-accent-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+        {/* Live Experiments */}
+        <section className="mb-12">
+          <h2 className="text-2xl font-bold text-white mb-6">Experiments</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            {liveExperiments.map((experiment) => (
+              <Link
+                key={experiment.name}
+                href={experiment.href}
+                className="card p-6 relative overflow-hidden group block"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-                />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-white mb-2">
-              Experiments in Progress
-            </h2>
-            <p className="text-surface-400 max-w-md mx-auto">
-              I&apos;m building out some interactive demos and experiments.
-              Check back soon to see what I&apos;m cooking up!
-            </p>
+                <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${experiment.gradient}`} />
+                <div className="text-4xl mb-4">{experiment.icon}</div>
+                <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-accent-400 transition-colors">
+                  {experiment.name}
+                </h3>
+                <p className="text-surface-400 text-sm">{experiment.description}</p>
+                <div className="mt-4 inline-flex items-center text-accent-400 text-sm font-medium group-hover:text-accent-300 transition-colors">
+                  Try it out
+                  <svg
+                    className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M17 8l4 4m0 0l-4 4m4-4H3"
+                    />
+                  </svg>
+                </div>
+              </Link>
+            ))}
           </div>
-        </div>
+        </section>
 
         {/* Coming Soon Grid */}
         <section>
