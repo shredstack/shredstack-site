@@ -69,6 +69,11 @@ function parseNumeric(value: unknown): number | null {
   return null;
 }
 
+function parseInteger(value: unknown): number | null {
+  const n = parseNumeric(value);
+  return n != null ? Math.round(n) : null;
+}
+
 // ============================================================
 // STAGE 1: HEURISTIC PRE-FILTER
 // ============================================================
@@ -300,12 +305,12 @@ async function storeLLMResult(
         workoutId,
         userId,
         movementName: m.name,
-        prescribedReps: parseNumeric(m.prescribed_reps_per_set) as number | null,
+        prescribedReps: parseInteger(m.prescribed_reps_per_set),
         prescribedWeight: parseNumeric(m.prescribed_weight),
         prescribedUnit: m.prescribed_unit || (m.prescribed_weight ? 'lbs' : null),
         estimatedActualWeight: parseNumeric(m.estimated_actual_weight),
         estimatedMaxWeight: parseNumeric(m.estimated_max_weight),
-        estimatedRepsCompleted: (parseNumeric(m.estimated_reps_per_set) ?? parseNumeric(m.estimated_reps_completed)) as number | null,
+        estimatedRepsCompleted: parseInteger(m.estimated_reps_per_set) ?? parseInteger(m.estimated_reps_completed),
         isLimitingFactor: m.is_limiting_factor ?? false,
         confidence: result.score_interpretation?.confidence || 'medium',
       }))
