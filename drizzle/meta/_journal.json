@@ -15,6 +15,34 @@
       "when": 1774955576884,
       "tag": "0001_add-cfd-dashboards",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774979910764,
+      "tag": "0002_add-smart-cfd-tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774995273358,
+      "tag": "0003_add-public-share-fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1774996200555,
+      "tag": "0004_add-insights-cache-fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774997171476,
+      "tag": "0005_add-raw-notes-to-workouts",
+      "breakpoints": true
     }
   ]
 }

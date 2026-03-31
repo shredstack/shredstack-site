@@ -15,6 +15,14 @@ const liveExperiments = [
     gradient: "from-rainbow-green to-rainbow-cyan",
     href: "/playground/cfd-dashboard",
   },
+  {
+    name: "Smart CFD Insights",
+    description:
+      "AI-powered workout analysis — upload your PushPress export and get corrected lift PRs, movement insights, and training pattern breakdowns.",
+    icon: "🧠",
+    gradient: "from-rainbow-purple to-rainbow-cyan",
+    href: "/playground/smart-cfd",
+  },
 ];
 
 const upcomingExperiments = [
