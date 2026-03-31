@@ -23,8 +23,18 @@ export const contactMessages = pgTable('contact_messages', {
   read: boolean('read').default(false),
 });
 
+export const cfdDashboards = pgTable('cfd_dashboards', {
+  id: serial('id').primaryKey(),
+  slug: varchar('slug', { length: 255 }).unique().notNull(),
+  displayName: varchar('display_name', { length: 255 }).notNull(),
+  data: text('data').notNull(), // JSON string of processed dashboard data
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
 // Type exports for use in application code
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type NewBlogPost = typeof blogPosts.$inferInsert;
 export type ContactMessage = typeof contactMessages.$inferSelect;
 export type NewContactMessage = typeof contactMessages.$inferInsert;
+export type CfdDashboard = typeof cfdDashboards.$inferSelect;
+export type NewCfdDashboard = typeof cfdDashboards.$inferInsert;
