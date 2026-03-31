@@ -1,0 +1,30 @@
+name: Apply Database Migrations
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "drizzle/**"
+
+jobs:
+  migrate:
+    name: Apply Drizzle Migrations
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply migrations
+        run: npx drizzle-kit migrate
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
