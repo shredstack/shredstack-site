@@ -1,0 +1,1 @@
+ALTER TABLE "smart_cfd_workouts" ADD COLUMN "raw_notes" text;
