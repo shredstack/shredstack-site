@@ -11,6 +11,8 @@ export default function WorkoutBrowserTab({ data }: WorkoutBrowserTabProps) {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [divisionFilter, setDivisionFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const categories = useMemo(
@@ -29,10 +31,12 @@ export default function WorkoutBrowserTab({ data }: WorkoutBrowserTabProps) {
         }
         if (categoryFilter !== 'all' && w.category !== categoryFilter) return false;
         if (divisionFilter !== 'all' && w.rawDivision?.toLowerCase() !== divisionFilter) return false;
+        if (dateFrom && w.workoutDate < dateFrom) return false;
+        if (dateTo && w.workoutDate > dateTo) return false;
         return true;
       })
       .sort((a, b) => b.workoutDate.localeCompare(a.workoutDate));
-  }, [data.workouts, search, categoryFilter, divisionFilter]);
+  }, [data.workouts, search, categoryFilter, divisionFilter, dateFrom, dateTo]);
 
   const expandedWorkout = expandedId !== null
     ? data.workouts.find((w) => w.id === expandedId)
@@ -76,6 +80,32 @@ export default function WorkoutBrowserTab({ data }: WorkoutBrowserTabProps) {
           <option value="rx">Rx</option>
           <option value="scaled">Scaled</option>
         </select>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="px-3 py-2 bg-surface-800 border border-surface-600 rounded-lg text-surface-300 text-sm focus:outline-none focus:border-accent-500 [color-scheme:dark]"
+            placeholder="From"
+          />
+          <span className="text-surface-500 text-sm">to</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="px-3 py-2 bg-surface-800 border border-surface-600 rounded-lg text-surface-300 text-sm focus:outline-none focus:border-accent-500 [color-scheme:dark]"
+            placeholder="To"
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => { setDateFrom(''); setDateTo(''); }}
+              className="text-surface-400 hover:text-white text-sm px-1"
+              title="Clear dates"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       <p className="text-surface-500 text-xs">{filtered.length} workouts</p>
