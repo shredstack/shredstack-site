@@ -24,8 +24,11 @@ export default function WorkoutBrowserTab({ data }: WorkoutBrowserTabProps) {
     const q = search.toLowerCase();
     return data.workouts
       .filter((w) => {
+        // Exclude monthly challenges from the browser
+        if (w.isMonthlyChallenge) return false;
         if (q && !w.rawDescription.toLowerCase().includes(q) &&
             !w.aiSummary?.toLowerCase().includes(q) &&
+            !w.canonicalTitle?.toLowerCase().includes(q) &&
             !w.rawTitle?.toLowerCase().includes(q)) {
           return false;
         }
@@ -39,14 +42,14 @@ export default function WorkoutBrowserTab({ data }: WorkoutBrowserTabProps) {
   }, [data.workouts, search, categoryFilter, divisionFilter, dateFrom, dateTo]);
 
   const expandedWorkout = expandedId !== null
-    ? data.workouts.find((w) => w.id === expandedId)
+    ? data.workouts.find((w) => w.scoreId === expandedId)
     : null;
 
   const similarWorkouts = useMemo(() => {
     if (!expandedWorkout?.similarityCluster) return [];
     const clusterIds = data.clusters[expandedWorkout.similarityCluster] || [];
     return data.workouts
-      .filter((w) => clusterIds.includes(w.id) && w.id !== expandedWorkout.id)
+      .filter((w) => clusterIds.includes(w.scoreId) && w.scoreId !== expandedWorkout.scoreId)
       .sort((a, b) => b.workoutDate.localeCompare(a.workoutDate));
   }, [expandedWorkout, data.clusters, data.workouts]);
 
@@ -114,11 +117,11 @@ export default function WorkoutBrowserTab({ data }: WorkoutBrowserTabProps) {
       <div className="space-y-2">
         {filtered.slice(0, 50).map((workout) => (
           <WorkoutCard
-            key={workout.id}
+            key={workout.scoreId}
             workout={workout}
-            isExpanded={expandedId === workout.id}
-            onToggle={() => setExpandedId(expandedId === workout.id ? null : workout.id)}
-            similarWorkouts={expandedId === workout.id ? similarWorkouts : []}
+            isExpanded={expandedId === workout.scoreId}
+            onToggle={() => setExpandedId(expandedId === workout.scoreId ? null : workout.scoreId)}
+            similarWorkouts={expandedId === workout.scoreId ? similarWorkouts : []}
           />
         ))}
         {filtered.length > 50 && (
@@ -175,7 +178,7 @@ function WorkoutCard({
               )}
             </div>
             <p className="text-white text-sm font-medium truncate">
-              {workout.aiSummary || workout.rawTitle || workout.rawDescription.substring(0, 80)}
+              {workout.canonicalTitle || workout.aiSummary || workout.rawTitle || workout.rawDescription.substring(0, 80)}
             </p>
             <p className="text-surface-400 text-xs mt-1">
               Score: {workout.rawScore}
@@ -236,10 +239,10 @@ function WorkoutCard({
                     ? 'text-orange-400'
                     : 'text-surface-400';
                   return (
-                    <div key={sw.id} className="flex items-center gap-2 text-xs">
+                    <div key={sw.scoreId} className="flex items-center gap-2 text-xs">
                       <span className="text-surface-500 w-20 shrink-0">{formatDate(sw.workoutDate)}</span>
                       <span className="text-surface-300 truncate flex-1">
-                        {sw.aiSummary || sw.rawTitle || sw.rawDescription.substring(0, 60)}
+                        {sw.canonicalTitle || sw.aiSummary || sw.rawTitle || sw.rawDescription.substring(0, 60)}
                       </span>
                       <span className="text-surface-400">{sw.rawScore}</span>
                       <span className={`${swDivColor} w-12 text-right`}>{sw.rawDivision}</span>

@@ -77,3 +77,7 @@ All migrations live in the `drizzle/` directory:
 - Always review generated SQL before running migrations
 - Back up production data before running destructive migrations
 - Test migrations on a staging database first when possible
+
+## Data Analysis Guidelines
+
+When analyzing user data (CSV exports, database records, etc.), ground all claims in the actual source data. Inferences are welcome — but they must be supported by evidence in the data (e.g., a workout on 11/29 with benchmark "Girls" names can reasonably be called "Thanksgiving With The Girls" since it's the day after Thanksgiving). Never fabricate names, labels, or metadata that contradict the data or have no basis in it. If a field is empty or ambiguous, say so explicitly and explain the reasoning behind any inference.

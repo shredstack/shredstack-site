@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { smartCfdUsers, smartCfdWorkouts } from '@/db/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { crossfitUsers, crossfitWorkouts, crossfitUserScores } from '@/db/schema';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { verifySession } from '@/lib/smart-cfd-auth';
-import { parseCSV, extractWorkouts, dedup, dedupKey } from '@/lib/smart-cfd-csv';
+import { processCSVUpload, type ProcessedWorkoutRow } from '@/lib/crossfit-csv';
 
 export async function POST(request: NextRequest) {
   const session = await verifySession();
@@ -24,86 +24,137 @@ export async function POST(request: NextRequest) {
     }
 
     const text = await file.text();
-    const rows = parseCSV(text);
+    const { rows, totalParsed, duplicatesRemoved } = processCSVUpload(text);
 
-    if (rows.length < 2) {
-      return NextResponse.json({ error: 'CSV file appears empty or malformed' }, { status: 400 });
-    }
-
-    const workouts = dedup(extractWorkouts(rows));
-
-    if (workouts.length === 0) {
+    if (rows.length === 0) {
       return NextResponse.json(
         { error: 'No valid workout rows found. Make sure this is a PushPress score export.' },
         { status: 400 }
       );
     }
 
-    // Get existing workouts for this user to diff
+    // ---------------------------------------------------------------
+    // Stage 2a: Match incoming rows against existing workouts by hash
+    // ---------------------------------------------------------------
+    const uniqueHashes = [...new Set(rows.map((r) => r.descriptionHash))];
+
+    // Look up which hashes already have workout records
     const existingWorkouts = await db
-      .select({
-        rawDescription: smartCfdWorkouts.rawDescription,
-        rawScore: smartCfdWorkouts.rawScore,
-        workoutDate: smartCfdWorkouts.workoutDate,
-      })
-      .from(smartCfdWorkouts)
-      .where(eq(smartCfdWorkouts.userId, session.userId));
+      .select({ id: crossfitWorkouts.id, descriptionHash: crossfitWorkouts.descriptionHash })
+      .from(crossfitWorkouts)
+      .where(inArray(crossfitWorkouts.descriptionHash, uniqueHashes));
 
-    const existingKeys = new Set(
-      existingWorkouts.map((w) =>
-        dedupKey({
-          rawTitle: '',
-          rawDescription: w.rawDescription,
-          rawScore: w.rawScore,
-          rawDivision: '',
-          rawNotes: '',
-          workoutDate: w.workoutDate,
-        })
-      )
-    );
+    const hashToWorkoutId = new Map(existingWorkouts.map((w) => [w.descriptionHash, w.id]));
 
-    // Filter to only truly new workouts
-    const newWorkouts = workouts.filter((w) => !existingKeys.has(dedupKey(w)));
-
-    if (newWorkouts.length > 0) {
-      // Insert in batches of 50 to avoid query size limits
-      const BATCH_SIZE = 50;
-      for (let i = 0; i < newWorkouts.length; i += BATCH_SIZE) {
-        const batch = newWorkouts.slice(i, i + BATCH_SIZE);
-        await db.insert(smartCfdWorkouts).values(
-          batch.map((w) => ({
-            userId: session.userId,
-            rawTitle: w.rawTitle || null,
-            rawDescription: w.rawDescription,
-            rawScore: w.rawScore,
-            rawDivision: w.rawDivision || null,
-            rawNotes: w.rawNotes || null,
-            workoutDate: w.workoutDate,
-          }))
-        );
+    // Create workout records for new hashes (first occurrence provides raw fields)
+    const newHashRows = new Map<string, ProcessedWorkoutRow>();
+    for (const row of rows) {
+      if (!hashToWorkoutId.has(row.descriptionHash) && !newHashRows.has(row.descriptionHash)) {
+        newHashRows.set(row.descriptionHash, row);
       }
     }
 
+    let newWorkoutCount = 0;
+    if (newHashRows.size > 0) {
+      const BATCH_SIZE = 50;
+      const newWorkoutEntries = [...newHashRows.values()];
+      for (let i = 0; i < newWorkoutEntries.length; i += BATCH_SIZE) {
+        const batch = newWorkoutEntries.slice(i, i + BATCH_SIZE);
+        const inserted = await db
+          .insert(crossfitWorkouts)
+          .values(
+            batch.map((row) => ({
+              descriptionHash: row.descriptionHash,
+              rawTitle: row.rawTitle || null,
+              rawDescription: row.rawDescription,
+              isMonthlyChallenge: row.isLikelyChallenge,
+            }))
+          )
+          .returning({ id: crossfitWorkouts.id, descriptionHash: crossfitWorkouts.descriptionHash });
+
+        for (const w of inserted) {
+          hashToWorkoutId.set(w.descriptionHash, w.id);
+        }
+        newWorkoutCount += inserted.length;
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Stage 2b: Dedup scores against existing user scores in the DB
+    // ---------------------------------------------------------------
+    // Get this user's existing scores to skip duplicates
+    const existingScores = await db
+      .select({
+        workoutId: crossfitUserScores.workoutId,
+        workoutDate: crossfitUserScores.workoutDate,
+      })
+      .from(crossfitUserScores)
+      .where(eq(crossfitUserScores.userId, session.userId));
+
+    const existingScoreKeys = new Set(
+      existingScores.map((s) => {
+        const dateStr = s.workoutDate.toISOString().split('T')[0];
+        return `${s.workoutId}|${dateStr}`;
+      })
+    );
+
+    // Filter to only truly new scores
+    const newScoreRows = rows.filter((row) => {
+      const workoutId = hashToWorkoutId.get(row.descriptionHash);
+      if (!workoutId) return false; // shouldn't happen
+      const dateStr = row.workoutDate.toISOString().split('T')[0];
+      return !existingScoreKeys.has(`${workoutId}|${dateStr}`);
+    });
+
+    // ---------------------------------------------------------------
+    // Insert user scores
+    // ---------------------------------------------------------------
+    let newScoreCount = 0;
+    if (newScoreRows.length > 0) {
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < newScoreRows.length; i += BATCH_SIZE) {
+        const batch = newScoreRows.slice(i, i + BATCH_SIZE);
+        await db.insert(crossfitUserScores).values(
+          batch.map((row) => ({
+            userId: session.userId,
+            workoutId: hashToWorkoutId.get(row.descriptionHash)!,
+            workoutDate: row.workoutDate,
+            rawScore: row.rawScore,
+            rawDivision: row.rawDivision || null,
+            rawNotes: row.rawNotes || null,
+          }))
+        );
+        newScoreCount += batch.length;
+      }
+    }
+
+    // ---------------------------------------------------------------
     // Update user record
+    // ---------------------------------------------------------------
     await db
-      .update(smartCfdUsers)
+      .update(crossfitUsers)
       .set({
         lastUploadAt: new Date(),
         analysisStatus: 'pending',
         analysisProgress: 0,
       })
-      .where(eq(smartCfdUsers.id, session.userId));
+      .where(eq(crossfitUsers.id, session.userId));
 
-    // Get total count
+    // Get total score count for this user
     const totalResult = await db
       .select({ count: sql<number>`count(*)` })
-      .from(smartCfdWorkouts)
-      .where(eq(smartCfdWorkouts.userId, session.userId));
+      .from(crossfitUserScores)
+      .where(eq(crossfitUserScores.userId, session.userId));
+
+    const monthlyChallengesDetected = rows.filter((r) => r.isLikelyChallenge).length;
+    const dbDuplicatesSkipped = rows.length - newScoreRows.length;
 
     return NextResponse.json({
-      newWorkoutCount: newWorkouts.length,
-      totalWorkoutCount: Number(totalResult[0].count),
-      duplicatesSkipped: workouts.length - newWorkouts.length,
+      newScoreCount,
+      newWorkoutCount,
+      duplicatesSkipped: duplicatesRemoved + dbDuplicatesSkipped,
+      monthlyChallengesDetected,
+      totalScoreCount: Number(totalResult[0].count),
     });
   } catch (error) {
     console.error('Upload error:', error);

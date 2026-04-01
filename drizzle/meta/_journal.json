@@ -43,6 +43,13 @@
       "when": 1774997171476,
       "tag": "0005_add-raw-notes-to-workouts",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775068239497,
+      "tag": "0006_crossfit-smart-insights-v2",
+      "breakpoints": true
     }
   ]
 }

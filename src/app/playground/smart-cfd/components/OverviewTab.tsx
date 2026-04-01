@@ -33,7 +33,7 @@ export default function OverviewTab({ data }: OverviewTabProps) {
     <div className="space-y-8">
       {/* Summary Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Total Workouts" value={summary.totalWorkouts} />
+        <StatCard label="Total Scores" value={summary.totalScores} sub={`${summary.uniqueWorkouts} unique workouts`} />
         <StatCard
           label="Rx Rate"
           value={`${summary.rxCount + summary.scaledCount > 0
@@ -48,9 +48,9 @@ export default function OverviewTab({ data }: OverviewTabProps) {
             : 'N/A'}
         />
         <StatCard
-          label="Categories"
-          value={Object.keys(summary.categories).length}
-          sub="workout types"
+          label="Repeat Workouts"
+          value={summary.repeatWorkouts}
+          sub="done more than once"
         />
       </div>
 
@@ -183,6 +183,7 @@ function formatShortDate(dateStr: string): string {
 function getMonthlyFrequency(workouts: DashboardData['workouts']) {
   const months: Record<string, number> = {};
   for (const w of workouts) {
+    if (w.isMonthlyChallenge) continue;
     const month = w.workoutDate.substring(0, 7); // YYYY-MM
     months[month] = (months[month] || 0) + 1;
   }
@@ -197,6 +198,7 @@ function getMonthlyFrequency(workouts: DashboardData['workouts']) {
 function getMonthlyRxRate(workouts: DashboardData['workouts']) {
   const months: Record<string, { rx: number; total: number }> = {};
   for (const w of workouts) {
+    if (w.isMonthlyChallenge) continue;
     const div = w.rawDivision?.toLowerCase();
     if (div !== 'rx' && div !== 'scaled') continue;
     const month = w.workoutDate.substring(0, 7);

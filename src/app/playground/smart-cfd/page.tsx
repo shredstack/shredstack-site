@@ -15,7 +15,7 @@ type SessionState =
 type AppView =
   | { view: 'loading' }
   | { view: 'upload' }
-  | { view: 'uploaded'; newWorkoutCount: number; totalWorkoutCount: number; duplicatesSkipped: number }
+  | { view: 'uploaded'; newScoreCount: number; newWorkoutCount: number; totalScoreCount: number; duplicatesSkipped: number; monthlyChallengesDetected: number }
   | { view: 'analyzing' }
   | { view: 'dashboard' };
 
@@ -99,7 +99,7 @@ function SmartCfdContent() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-white mb-2">
-              <span className="text-gradient-rainbow">Smart CFD Insights</span>
+              <span className="text-gradient-rainbow">CrossFit Smart Insights</span>
             </h1>
             <p className="text-surface-400">Signed in as {session.email}</p>
           </div>
@@ -131,13 +131,17 @@ function SmartCfdContent() {
               <div className="text-4xl mb-4">✅</div>
               <h2 className="text-xl font-semibold text-white mb-4">Data uploaded</h2>
 
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="card p-4">
+                  <div className="text-2xl font-bold text-white">{appView.newScoreCount}</div>
+                  <div className="text-surface-400 text-xs mt-1">New scores</div>
+                </div>
                 <div className="card p-4">
                   <div className="text-2xl font-bold text-white">{appView.newWorkoutCount}</div>
                   <div className="text-surface-400 text-xs mt-1">New workouts</div>
                 </div>
                 <div className="card p-4">
-                  <div className="text-2xl font-bold text-white">{appView.totalWorkoutCount}</div>
+                  <div className="text-2xl font-bold text-white">{appView.totalScoreCount}</div>
                   <div className="text-surface-400 text-xs mt-1">Total stored</div>
                 </div>
                 <div className="card p-4">

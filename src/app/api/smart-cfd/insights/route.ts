@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession } from '@/lib/smart-cfd-auth';
-import { generateInsights, getCachedInsights } from '@/lib/smart-cfd-insights';
+import { generateInsights, getCachedInsights } from '@/lib/crossfit-insights';
 
 export const maxDuration = 60;
 
@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
 
   const regenerate = request.nextUrl.searchParams.get('regenerate') === 'true';
   const checkOnly = request.nextUrl.searchParams.get('checkOnly') === 'true';
+  const dateFrom = request.nextUrl.searchParams.get('dateFrom') || undefined;
+  const dateTo = request.nextUrl.searchParams.get('dateTo') || undefined;
 
   try {
     // Check for cached insights first
@@ -31,7 +33,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Generate fresh insights
-    const narrative = await generateInsights(session.userId);
+    const narrative = await generateInsights(session.userId, dateFrom, dateTo);
     return NextResponse.json({
       narrative,
       generatedAt: new Date().toISOString(),

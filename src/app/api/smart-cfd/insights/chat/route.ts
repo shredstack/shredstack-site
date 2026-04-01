@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { db } from '@/db';
-import { smartCfdUsers, smartCfdWorkouts, smartCfdMovements } from '@/db/schema';
-import { eq, asc } from 'drizzle-orm';
 import { verifySession } from '@/lib/smart-cfd-auth';
-import { buildSummaryPrompt } from '@/lib/smart-cfd-insights';
+import { buildSummaryPrompt, loadUserData } from '@/lib/crossfit-insights';
 
 export const maxDuration = 60;
 
@@ -35,18 +32,8 @@ export async function POST(request: NextRequest) {
   }
 
   // Get user's training data for context
-  const workouts = await db
-    .select()
-    .from(smartCfdWorkouts)
-    .where(eq(smartCfdWorkouts.userId, session.userId))
-    .orderBy(asc(smartCfdWorkouts.workoutDate));
-
-  const movements = await db
-    .select()
-    .from(smartCfdMovements)
-    .where(eq(smartCfdMovements.userId, session.userId));
-
-  const summaryData = workouts.length > 0 ? buildSummaryPrompt(workouts, movements) : '';
+  const { scores, performance } = await loadUserData(session.userId);
+  const summaryData = scores.length > 0 ? buildSummaryPrompt(scores, performance) : '';
 
   const client = new Anthropic({ apiKey });
   const response = await client.messages.create({

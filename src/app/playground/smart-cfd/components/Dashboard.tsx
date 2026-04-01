@@ -120,7 +120,7 @@ export default function Dashboard({ onUploadMore, onReanalyze, onSignOut, email,
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold text-white mb-1">
-            <span className="text-gradient-rainbow">Smart CFD Insights</span>
+            <span className="text-gradient-rainbow">CrossFit Smart Insights</span>
           </h1>
           {readOnly ? (
             <p className="text-surface-400 text-sm">

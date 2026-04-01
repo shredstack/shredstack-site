@@ -22,9 +22,10 @@ export default function MovementsTab({ data }: MovementsTabProps) {
   const [sortBy, setSortBy] = useState<'appearances' | 'scaledRate' | 'limitingFactor'>('appearances');
 
   const { movementStats, limitingFactors, rxRate } = useMemo(() => {
-    const workoutMap = new Map<number, DashboardWorkout>();
+    // Map scoreId → workout for division lookup
+    const scoreMap = new Map<number, DashboardWorkout>();
     for (const w of data.workouts) {
-      workoutMap.set(w.id, w);
+      scoreMap.set(w.scoreId, w);
     }
 
     // Group movements by name
@@ -50,10 +51,10 @@ export default function MovementsTab({ data }: MovementsTabProps) {
       let maxWeight: number | null = null;
 
       for (const m of movements) {
-        const workout = workoutMap.get(m.workoutId);
-        if (!workout) continue;
+        const score = scoreMap.get(m.userScoreId);
+        if (!score) continue;
 
-        const div = workout.rawDivision?.toLowerCase();
+        const div = score.rawDivision?.toLowerCase();
         if (div === 'rx') rxCount++;
         else if (div === 'scaled') scaledCount++;
 
