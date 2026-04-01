@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 
 interface AnalysisProgressProps {
   onComplete: () => void;
@@ -12,16 +12,70 @@ type AnalysisState =
   | { phase: 'complete'; totalProcessed: number }
   | { phase: 'error'; message: string };
 
+// If a single /analyze call takes longer than this, assume it timed out
+const REQUEST_TIMEOUT_MS = 65_000;
+// Poll /status independently at this interval
+const STATUS_POLL_INTERVAL_MS = 3_000;
+
 export default function AnalysisProgress({ onComplete }: AnalysisProgressProps) {
   const [state, setState] = useState<AnalysisState>({ phase: 'starting' });
+  const abortRef = useRef(false);
+  const totalProcessedRef = useRef(0);
+
+  // Independent status poller — keeps UI updated even while /analyze is in-flight
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/smart-cfd/status');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        setState((prev) => {
+          // Don't overwrite complete or error states
+          if (prev.phase === 'complete' || prev.phase === 'error') return prev;
+
+          return {
+            phase: 'running',
+            progress: data.progress || 0,
+            processedSoFar: totalProcessedRef.current,
+          };
+        });
+      } catch {
+        // Ignore polling errors — the main loop handles real failures
+      }
+    }, STATUS_POLL_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const runAnalysis = useCallback(async () => {
-    let totalProcessed = 0;
+    abortRef.current = false;
+    totalProcessedRef.current = 0;
 
     try {
       // Chunked processing: keep calling /analyze until done
-      while (true) {
-        const res = await fetch('/api/smart-cfd/analyze', { method: 'POST' });
+      while (!abortRef.current) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+        let res: Response;
+        try {
+          res = await fetch('/api/smart-cfd/analyze', {
+            method: 'POST',
+            signal: controller.signal,
+          });
+        } catch (err) {
+          clearTimeout(timeout);
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            // Request timed out — the server may still be processing.
+            // Continue the loop so the next call picks up where it left off.
+            console.warn('Analyze request timed out, retrying...');
+            continue;
+          }
+          throw err;
+        } finally {
+          clearTimeout(timeout);
+        }
 
         if (!res.ok) {
           const data = await res.json();
@@ -30,24 +84,21 @@ export default function AnalysisProgress({ onComplete }: AnalysisProgressProps) 
         }
 
         const data = await res.json();
-        totalProcessed += data.processed;
+        totalProcessedRef.current += data.processed;
 
         if (data.done) {
-          setState({ phase: 'complete', totalProcessed });
+          setState({ phase: 'complete', totalProcessed: totalProcessedRef.current });
           setTimeout(onComplete, 1500);
           return;
         }
 
-        // Update progress from status endpoint for accuracy
-        const statusRes = await fetch('/api/smart-cfd/status');
-        if (statusRes.ok) {
-          const statusData = await statusRes.json();
-          setState({
-            phase: 'running',
-            progress: statusData.progress || 0,
-            processedSoFar: totalProcessed,
-          });
-        }
+        setState({
+          phase: 'running',
+          progress: Math.round(
+            ((data.total - data.remaining) / data.total) * 100
+          ),
+          processedSoFar: totalProcessedRef.current,
+        });
       }
     } catch (err) {
       setState({
@@ -59,6 +110,9 @@ export default function AnalysisProgress({ onComplete }: AnalysisProgressProps) 
 
   useEffect(() => {
     runAnalysis();
+    return () => {
+      abortRef.current = true;
+    };
   }, [runAnalysis]);
 
   return (

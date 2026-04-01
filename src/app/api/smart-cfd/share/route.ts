@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { smartCfdUsers } from '@/db/schema';
+import { crossfitUsers } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { verifySession } from '@/lib/smart-cfd-auth';
 import { randomBytes } from 'crypto';
@@ -18,8 +18,8 @@ export async function GET() {
 
   const user = await db
     .select()
-    .from(smartCfdUsers)
-    .where(eq(smartCfdUsers.id, session.userId))
+    .from(crossfitUsers)
+    .where(eq(crossfitUsers.id, session.userId))
     .limit(1);
 
   if (user.length === 0) {
@@ -41,8 +41,8 @@ export async function POST() {
 
   const user = await db
     .select()
-    .from(smartCfdUsers)
-    .where(eq(smartCfdUsers.id, session.userId))
+    .from(crossfitUsers)
+    .where(eq(crossfitUsers.id, session.userId))
     .limit(1);
 
   if (user.length === 0) {
@@ -54,18 +54,18 @@ export async function POST() {
   if (currentlyPublic) {
     // Turn off sharing
     await db
-      .update(smartCfdUsers)
+      .update(crossfitUsers)
       .set({ isPublic: false })
-      .where(eq(smartCfdUsers.id, session.userId));
+      .where(eq(crossfitUsers.id, session.userId));
 
     return NextResponse.json({ isPublic: false, publicSlug: user[0].publicSlug });
   } else {
     // Turn on sharing — generate slug if needed
     const slug = user[0].publicSlug || generateSlug();
     await db
-      .update(smartCfdUsers)
+      .update(crossfitUsers)
       .set({ isPublic: true, publicSlug: slug })
-      .where(eq(smartCfdUsers.id, session.userId));
+      .where(eq(crossfitUsers.id, session.userId));
 
     return NextResponse.json({ isPublic: true, publicSlug: slug });
   }

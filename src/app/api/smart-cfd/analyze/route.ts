@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { verifySession } from '@/lib/smart-cfd-auth';
-import { processAnalysisChunk } from '@/lib/smart-cfd-analysis';
+import { processAnalysisChunk } from '@/lib/crossfit-analysis';
 
 export const maxDuration = 60; // Vercel Pro plan: 60s timeout
 

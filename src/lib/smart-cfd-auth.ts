@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { db } from '@/db';
-import { smartCfdUsers } from '@/db/schema';
+import { crossfitUsers } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
 const COOKIE_NAME = 'smart-cfd-session';
@@ -60,6 +60,15 @@ export async function verifySession(): Promise<{ userId: number; email: string }
     ) {
       return null;
     }
+    // Verify user still exists in the DB (handles table migrations / resets)
+    const userExists = await db
+      .select({ id: crossfitUsers.id })
+      .from(crossfitUsers)
+      .where(eq(crossfitUsers.id, payload.userId))
+      .limit(1);
+
+    if (userExists.length === 0) return null;
+
     return { userId: payload.userId, email: payload.email };
   } catch {
     return null;
@@ -88,14 +97,14 @@ export async function clearSessionCookie() {
 export async function getOrCreateUser(email: string) {
   const existing = await db
     .select()
-    .from(smartCfdUsers)
-    .where(eq(smartCfdUsers.email, email))
+    .from(crossfitUsers)
+    .where(eq(crossfitUsers.email, email))
     .limit(1);
 
   if (existing.length > 0) return existing[0];
 
   const result = await db
-    .insert(smartCfdUsers)
+    .insert(crossfitUsers)
     .values({ email })
     .returning();
 

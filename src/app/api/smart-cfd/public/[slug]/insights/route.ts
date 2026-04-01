@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { smartCfdUsers } from '@/db/schema';
+import { crossfitUsers } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { generateInsights, getCachedInsights } from '@/lib/smart-cfd-insights';
+import { generateInsights, getCachedInsights } from '@/lib/crossfit-insights';
 
 export const maxDuration = 60;
 
@@ -14,8 +14,8 @@ export async function GET(
 
   const [user] = await db
     .select()
-    .from(smartCfdUsers)
-    .where(and(eq(smartCfdUsers.publicSlug, slug), eq(smartCfdUsers.isPublic, true)))
+    .from(crossfitUsers)
+    .where(and(eq(crossfitUsers.publicSlug, slug), eq(crossfitUsers.isPublic, true)))
     .limit(1);
 
   if (!user) {

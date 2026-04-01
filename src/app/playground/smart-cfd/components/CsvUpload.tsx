@@ -3,9 +3,11 @@
 import { useCallback, useState, useRef } from 'react';
 
 interface UploadResult {
+  newScoreCount: number;
   newWorkoutCount: number;
-  totalWorkoutCount: number;
+  totalScoreCount: number;
   duplicatesSkipped: number;
+  monthlyChallengesDetected: number;
 }
 
 interface CsvUploadProps {

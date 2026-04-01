@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { smartCfdUsers } from '@/db/schema';
+import { crossfitUsers } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { verifySession } from '@/lib/smart-cfd-auth';
 
@@ -12,11 +12,11 @@ export async function GET() {
 
   const user = await db
     .select({
-      analysisStatus: smartCfdUsers.analysisStatus,
-      analysisProgress: smartCfdUsers.analysisProgress,
+      analysisStatus: crossfitUsers.analysisStatus,
+      analysisProgress: crossfitUsers.analysisProgress,
     })
-    .from(smartCfdUsers)
-    .where(eq(smartCfdUsers.id, session.userId))
+    .from(crossfitUsers)
+    .where(eq(crossfitUsers.id, session.userId))
     .limit(1);
 
   if (user.length === 0) {

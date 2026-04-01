@@ -5,22 +5,29 @@ export interface DashboardData {
     lastUploadAt: string | null;
   };
   summary: {
-    totalWorkouts: number;
+    totalScores: number;
+    uniqueWorkouts: number;
     dateRange: string[];
     rxCount: number;
     scaledCount: number;
+    monthlyChallengeEntries: number;
     categories: Record<string, number>;
+    repeatWorkouts: number;
   };
   workouts: DashboardWorkout[];
   movements: DashboardMovement[];
   strengthPRs: Record<string, StrengthPR>;
   clusters: Record<string, number[]>;
+  repeatWorkoutProgressions: RepeatWorkoutProgression[];
 }
 
 export interface DashboardWorkout {
-  id: number;
+  scoreId: number;
+  workoutId: number;
   rawTitle: string | null;
   rawDescription: string;
+  canonicalTitle: string | null;
+  titleSource: string | null;
   rawScore: string;
   rawDivision: string | null;
   rawNotes: string | null;
@@ -30,20 +37,18 @@ export interface DashboardWorkout {
   category: string | null;
   similarityCluster: string | null;
   aiSummary: string | null;
+  isMonthlyChallenge: boolean | null;
 }
 
 export interface DashboardMovement {
-  id: number;
-  workoutId: number;
-  userId: number;
+  userScoreId: number;
+  movementId: number;
   movementName: string;
-  prescribedReps: number | null;
-  prescribedWeight: number | null;
-  prescribedUnit: string | null;
   estimatedActualWeight: number | null;
   estimatedMaxWeight: number | null;
   estimatedRepsCompleted: number | null;
   isLimitingFactor: boolean | null;
+  inferredScalingDetail: string | null;
   confidence: string | null;
 }
 
@@ -54,4 +59,11 @@ export interface StrengthPR {
   rawScoreMisinterpretation: string | null;
   confidence: string;
   history: { date: string; weight: number }[];
+}
+
+export interface RepeatWorkoutProgression {
+  workoutId: number;
+  title: string;
+  scores: { date: string; score: string; division: string | null }[];
+  improvement: string | null;
 }
