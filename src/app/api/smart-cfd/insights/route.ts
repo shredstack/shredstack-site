@@ -11,9 +11,10 @@ export async function GET(request: NextRequest) {
   }
 
   const regenerate = request.nextUrl.searchParams.get('regenerate') === 'true';
+  const checkOnly = request.nextUrl.searchParams.get('checkOnly') === 'true';
 
   try {
-    // Return cached insights unless regeneration is requested
+    // Check for cached insights first
     if (!regenerate) {
       const cached = await getCachedInsights(session.userId);
       if (cached) {
@@ -22,6 +23,10 @@ export async function GET(request: NextRequest) {
           generatedAt: cached.generatedAt.toISOString(),
           cached: true,
         });
+      }
+      // If only checking, return empty result without generating
+      if (checkOnly) {
+        return NextResponse.json({ narrative: null, cached: false });
       }
     }
 

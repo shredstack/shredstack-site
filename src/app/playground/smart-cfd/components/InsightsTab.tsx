@@ -16,7 +16,9 @@ export default function InsightsTab({ insightsUrl, readOnly }: InsightsTabProps 
   const [narrative, setNarrative] = useState<string | null>(null);
   const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [needsGeneration, setNeedsGeneration] = useState(false);
   const [error, setError] = useState('');
 
   // Chat state
@@ -32,6 +34,8 @@ export default function InsightsTab({ insightsUrl, readOnly }: InsightsTabProps 
   const fetchInsights = useCallback(async (regenerate = false) => {
     if (regenerate) {
       setRegenerating(true);
+    } else if (generating) {
+      // Already generating from the start button
     } else {
       setLoading(true);
     }
@@ -46,17 +50,47 @@ export default function InsightsTab({ insightsUrl, readOnly }: InsightsTabProps 
       const data = await res.json();
       setNarrative(data.narrative);
       setGeneratedAt(data.generatedAt || null);
+      setNeedsGeneration(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load insights');
     } finally {
       setLoading(false);
+      setGenerating(false);
       setRegenerating(false);
     }
+  }, [baseUrl, generating]);
+
+  // On mount, only check for cached insights — don't auto-generate
+  useEffect(() => {
+    const checkForCached = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${baseUrl}?checkOnly=true`);
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || 'Failed to check insights');
+        }
+        const data = await res.json();
+        if (data.narrative) {
+          setNarrative(data.narrative);
+          setGeneratedAt(data.generatedAt || null);
+        } else {
+          setNeedsGeneration(true);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load insights');
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkForCached();
   }, [baseUrl]);
 
-  useEffect(() => {
+  const handleStartGeneration = () => {
+    setNeedsGeneration(false);
+    setGenerating(true);
     fetchInsights();
-  }, [fetchInsights]);
+  };
 
   // Scroll chat to bottom when new messages arrive
   useEffect(() => {
@@ -121,6 +155,35 @@ export default function InsightsTab({ insightsUrl, readOnly }: InsightsTabProps 
         >
           Retry
         </button>
+      </div>
+    );
+  }
+
+  if (generating) {
+    return (
+      <div className="card p-12 text-center">
+        <div className="text-4xl mb-4 animate-pulse">🧠</div>
+        <h3 className="text-lg font-semibold text-white mb-2">Generating your insights...</h3>
+        <p className="text-surface-400 text-sm">This can take up to 20 minutes depending on how much data you have. Feel free to explore the other tabs while you wait.</p>
+      </div>
+    );
+  }
+
+  if (needsGeneration) {
+    return (
+      <div className="card p-12 text-center">
+        <div className="text-4xl mb-4">🧠</div>
+        <h3 className="text-lg font-semibold text-white mb-3">AI Insights</h3>
+        <p className="text-surface-400 text-sm mb-6 max-w-md mx-auto">
+          Generate a personalized analysis of your training data, including strength progress, workout trends, and actionable suggestions.
+        </p>
+        <button
+          onClick={handleStartGeneration}
+          className="px-6 py-3 bg-accent-600 hover:bg-accent-500 text-white text-sm font-medium rounded-lg transition-colors"
+        >
+          Start Generating AI Insights About Your Training
+        </button>
+        <p className="text-surface-500 text-xs mt-4">Estimated time: ~20 minutes</p>
       </div>
     );
   }
