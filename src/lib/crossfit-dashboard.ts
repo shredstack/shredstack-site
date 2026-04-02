@@ -65,6 +65,7 @@ export async function buildDashboardResponse(
     inferredScalingDetail: string | null;
     confidence: string | null;
     isWeighted: boolean | null;
+    is1rmApplicable: boolean | null;
   }[] = [];
 
   if (scoreIds.length > 0) {
@@ -80,6 +81,7 @@ export async function buildDashboardResponse(
         inferredScalingDetail: crossfitUserMovementPerformance.inferredScalingDetail,
         confidence: crossfitUserMovementPerformance.confidence,
         isWeighted: crossfitMovements.isWeighted,
+        is1rmApplicable: crossfitMovements.is1rmApplicable,
       })
       .from(crossfitUserMovementPerformance)
       .innerJoin(crossfitMovements, eq(crossfitUserMovementPerformance.movementId, crossfitMovements.id));
@@ -185,6 +187,7 @@ function computeStrengthPRs(
     estimatedRepsCompleted: number | null;
     confidence: string | null;
     isWeighted: boolean | null;
+    is1rmApplicable?: boolean | null;
   }[],
   scores: { scoreId: number; workoutDate: Date; aiScoreInterpretation: string | null }[]
 ): Record<string, {
@@ -194,13 +197,17 @@ function computeStrengthPRs(
   rawScoreMisinterpretation: string | null;
   confidence: string;
   history: { date: string; weight: number }[];
+  projected1RM: number | null;
+  projectedFrom: string | null;
 }> {
   const scoreMap = new Map(scores.map((s) => [s.scoreId, s]));
 
-  // Group by movement name
+  // Group by movement name — filter out non-1RM-applicable movements
   const byLift = new Map<string, typeof performance>();
   for (const p of performance) {
     if (!p.estimatedMaxWeight || !p.isWeighted) continue;
+    // Skip movements where 1RM is meaningless (carries, runs, wall balls, etc.)
+    if (p.is1rmApplicable === false) continue;
     if (!byLift.has(p.canonicalName)) byLift.set(p.canonicalName, []);
     byLift.get(p.canonicalName)!.push(p);
   }
@@ -212,6 +219,8 @@ function computeStrengthPRs(
     rawScoreMisinterpretation: string | null;
     confidence: string;
     history: { date: string; weight: number }[];
+    projected1RM: number | null;
+    projectedFrom: string | null;
   }> = {};
 
   for (const [liftName, liftPerf] of byLift) {
@@ -255,6 +264,51 @@ function computeStrengthPRs(
       } catch { /* ignore */ }
     }
 
+    // Projected 1RM: if best tested 1RM is >2 months old and we have recent metcon data
+    let projected1RM: number | null = null;
+    let projectedFrom: string | null = null;
+
+    const bestDate = bestScore ? bestScore.workoutDate : null;
+    const twoMonthsAgo = new Date();
+    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+
+    if (bestDate && bestDate < twoMonthsAgo && lowRep.length > 0) {
+      // Gather metcon performances (>3 reps) after the best 1RM test
+      const recentHighRep = liftPerf.filter((p) => {
+        const score = scoreMap.get(p.userScoreId);
+        if (!score || !p.estimatedMaxWeight) return false;
+        const pDate = score.workoutDate;
+        const reps = p.estimatedRepsCompleted;
+        return pDate > bestDate && reps !== null && reps > 3;
+      });
+
+      if (recentHighRep.length >= 3) {
+        // Use Epley and Brzycki formulas to estimate 1RM from each recent performance
+        const estimates: number[] = [];
+        for (const p of recentHighRep) {
+          const w = p.estimatedMaxWeight!;
+          const r = p.estimatedRepsCompleted!;
+          if (r > 0 && r <= 15 && w > 0) {
+            const epley = w * (1 + r / 30);
+            const brzycki = r === 1 ? w : w * 36 / (37 - r);
+            estimates.push((epley + brzycki) / 2);
+          }
+        }
+
+        if (estimates.length >= 3) {
+          // Take the highest recent estimate
+          const highestEstimate = Math.max(...estimates);
+          const tested1RM = best.estimatedMaxWeight!;
+
+          // Only project upward — don't project lower than tested 1RM
+          if (highestEstimate > tested1RM) {
+            projected1RM = Math.round(highestEstimate);
+            projectedFrom = 'recent training trend';
+          }
+        }
+      }
+    }
+
     result[liftName] = {
       estimatedMax: best.estimatedMaxWeight!,
       bestReps: best.estimatedRepsCompleted,
@@ -262,6 +316,8 @@ function computeStrengthPRs(
       rawScoreMisinterpretation,
       confidence: lowRep.length > 0 ? 'high' : (best.confidence || 'medium'),
       history,
+      projected1RM,
+      projectedFrom,
     };
   }
 

@@ -103,6 +103,8 @@ export const crossfitMovements = pgTable('crossfit_movements', {
   // 'barbell' | 'dumbbell' | 'kettlebell' | 'gymnastics' | 'bodyweight'
   // | 'monostructural' | 'accessory' | 'other'
   isWeighted: boolean('is_weighted').default(false),
+  is1rmApplicable: boolean('is_1rm_applicable').default(true),
+  // false for movements where a 1RM is meaningless (carries, runs, wall balls, etc.)
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 

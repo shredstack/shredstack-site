@@ -174,6 +174,232 @@ function inferParentType(categoryName: string): string {
 // MOVEMENT CATALOG
 // ============================================================
 
+// Deterministic synonym map — resolves before DB lookup
+const MOVEMENT_SYNONYMS: Record<string, string> = {
+  // Muscle-ups: unqualified = ring
+  'muscle-up': 'Ring Muscle-Up',
+  'muscle-ups': 'Ring Muscle-Up',
+  'muscle up': 'Ring Muscle-Up',
+  'muscle ups': 'Ring Muscle-Up',
+  'ring muscle-up': 'Ring Muscle-Up',
+  'ring muscle-ups': 'Ring Muscle-Up',
+  'ring muscle up': 'Ring Muscle-Up',
+  'ring muscle ups': 'Ring Muscle-Up',
+  'bar muscle-up': 'Bar Muscle-Up',
+  'bar muscle-ups': 'Bar Muscle-Up',
+  'bar muscle up': 'Bar Muscle-Up',
+  'bar muscle ups': 'Bar Muscle-Up',
+  'bmu': 'Bar Muscle-Up',
+
+  // Double-unders
+  'double-unders': 'Double-Under',
+  'double under': 'Double-Under',
+  'double unders': 'Double-Under',
+  'dubs': 'Double-Under',
+  'single-unders': 'Single-Under',
+  'single under': 'Single-Under',
+  'single unders': 'Single-Under',
+
+  // Pull-ups
+  'pull-ups': 'Pull-Up',
+  'pullups': 'Pull-Up',
+  'pullup': 'Pull-Up',
+  'pull ups': 'Pull-Up',
+  'chest-to-bar pull-up': 'Chest-to-Bar Pull-Up',
+  'chest-to-bar pull-ups': 'Chest-to-Bar Pull-Up',
+  'chest to bar pull-up': 'Chest-to-Bar Pull-Up',
+  'chest to bar pull-ups': 'Chest-to-Bar Pull-Up',
+  'c2b pull-up': 'Chest-to-Bar Pull-Up',
+  'c2b pull-ups': 'Chest-to-Bar Pull-Up',
+  'c2b': 'Chest-to-Bar Pull-Up',
+
+  // Toes-to-bar
+  'toes-to-bars': 'Toes-to-Bar',
+  'toes to bars': 'Toes-to-Bar',
+  'toes to bar': 'Toes-to-Bar',
+  'toes-to-bar': 'Toes-to-Bar',
+  't2b': 'Toes-to-Bar',
+  'knees-to-elbow': 'Knee-to-Elbow',
+  'knees-to-elbows': 'Knee-to-Elbow',
+  'knees to elbows': 'Knee-to-Elbow',
+  'k2e': 'Knee-to-Elbow',
+
+  // Box movements
+  'box jumps': 'Box Jump',
+  'box jump overs': 'Box Jump-Over',
+  'box jump-overs': 'Box Jump-Over',
+  'box step-ups': 'Box Step-Up',
+  'box step ups': 'Box Step-Up',
+
+  // Wall balls
+  'wall balls': 'Wall Ball',
+  'wall ball shots': 'Wall Ball',
+  'wall ball shot': 'Wall Ball',
+
+  // Burpees
+  'burpees': 'Burpee',
+  'bar-facing burpees': 'Bar-Facing Burpee',
+  'bar facing burpees': 'Bar-Facing Burpee',
+  'bar-facing burpee': 'Bar-Facing Burpee',
+  'burpee box jump-overs': 'Burpee Box Jump-Over',
+  'burpee box jump overs': 'Burpee Box Jump-Over',
+
+  // Sit-ups
+  'sit-ups': 'Sit-Up',
+  'situps': 'Sit-Up',
+  'situp': 'Sit-Up',
+  'ghd sit-ups': 'GHD Sit-Up',
+  'ghd situps': 'GHD Sit-Up',
+  'ghd sit-up': 'GHD Sit-Up',
+  'ghd situp': 'GHD Sit-Up',
+
+  // Handstand push-ups
+  'handstand push-ups': 'Handstand Push-Up',
+  'handstand pushups': 'Handstand Push-Up',
+  'handstand push-up': 'Handstand Push-Up',
+  'handstand pushup': 'Handstand Push-Up',
+  'hspu': 'Handstand Push-Up',
+  'strict handstand push-up': 'Strict Handstand Push-Up',
+  'strict handstand push-ups': 'Strict Handstand Push-Up',
+  'strict hspu': 'Strict Handstand Push-Up',
+
+  // Presses
+  'press': 'Strict Press',
+  'shoulder press': 'Strict Press',
+  'strict press': 'Strict Press',
+  'push press': 'Push Press',
+  'push jerk': 'Push Jerk',
+  'jerk': 'Push Jerk',
+  'split jerk': 'Split Jerk',
+
+  // Cleans — bare "clean" stays generic; prompt handles disambiguation
+  'power clean': 'Power Clean',
+  'power cleans': 'Power Clean',
+  'squat clean': 'Squat Clean',
+  'squat cleans': 'Squat Clean',
+  'hang clean': 'Hang Power Clean',
+  'hang cleans': 'Hang Power Clean',
+  'hang power clean': 'Hang Power Clean',
+  'hang power cleans': 'Hang Power Clean',
+  'hang squat clean': 'Hang Squat Clean',
+  'hang squat cleans': 'Hang Squat Clean',
+  'clean and jerk': 'Clean and Jerk',
+  'clean & jerk': 'Clean and Jerk',
+
+  // Snatches
+  'power snatch': 'Power Snatch',
+  'power snatches': 'Power Snatch',
+  'squat snatch': 'Squat Snatch',
+  'squat snatches': 'Squat Snatch',
+  'hang snatch': 'Hang Power Snatch',
+  'hang snatches': 'Hang Power Snatch',
+  'hang power snatch': 'Hang Power Snatch',
+  'hang power snatches': 'Hang Power Snatch',
+
+  // Squats
+  'back squats': 'Back Squat',
+  'front squats': 'Front Squat',
+  'overhead squats': 'Overhead Squat',
+  'air squats': 'Air Squat',
+  'goblet squats': 'Goblet Squat',
+  'pistols': 'Pistol Squat',
+  'pistol squats': 'Pistol Squat',
+  'pistol': 'Pistol Squat',
+
+  // Deadlifts
+  'deadlifts': 'Deadlift',
+  'sumo deadlift high pull': 'Sumo Deadlift High Pull',
+  'sumo deadlift high pulls': 'Sumo Deadlift High Pull',
+  'sdhp': 'Sumo Deadlift High Pull',
+  'romanian deadlift': 'Romanian Deadlift',
+  'romanian deadlifts': 'Romanian Deadlift',
+  'rdl': 'Romanian Deadlift',
+
+  // Thrusters
+  'thrusters': 'Thruster',
+
+  // Carries
+  'farmer carry': 'Farmers Carry',
+  "farmer's carry": 'Farmers Carry',
+  'farmers carry': 'Farmers Carry',
+  'farmers walk': 'Farmers Carry',
+  'farmer walk': 'Farmers Carry',
+  'front rack carry': 'Front Rack Carry',
+  'overhead carry': 'Overhead Carry',
+
+  // Rope
+  'rope climbs': 'Rope Climb',
+  'rope climb': 'Rope Climb',
+
+  // Rowing / cardio
+  'row': 'Row',
+  'rowing': 'Row',
+  'ski erg': 'Ski Erg',
+  'assault bike': 'Assault Bike',
+  'echo bike': 'Echo Bike',
+  'bike erg': 'Bike Erg',
+
+  // Kettlebell
+  'kb swing': 'Kettlebell Swing',
+  'kb swings': 'Kettlebell Swing',
+  'kettlebell swings': 'Kettlebell Swing',
+  'russian kb swing': 'Russian Kettlebell Swing',
+  'american kb swing': 'American Kettlebell Swing',
+  'kb snatch': 'Kettlebell Snatch',
+  'kb snatches': 'Kettlebell Snatch',
+
+  // Dumbbell
+  'db snatch': 'Dumbbell Snatch',
+  'db snatches': 'Dumbbell Snatch',
+  'dumbbell snatch': 'Dumbbell Snatch',
+  'dumbbell snatches': 'Dumbbell Snatch',
+  'db clean': 'Dumbbell Clean',
+  'db cleans': 'Dumbbell Clean',
+  'db hang clean': 'Dumbbell Hang Clean',
+  'db hang cleans': 'Dumbbell Hang Clean',
+  'db hang squat clean': 'Dumbbell Hang Squat Clean',
+  'db hang squat cleans': 'Dumbbell Hang Squat Clean',
+  'db thruster': 'Dumbbell Thruster',
+  'db thrusters': 'Dumbbell Thruster',
+  'dumbbell thruster': 'Dumbbell Thruster',
+  'dumbbell thrusters': 'Dumbbell Thruster',
+
+  // Lunges
+  'lunges': 'Lunge',
+  'walking lunges': 'Walking Lunge',
+  'walking lunge': 'Walking Lunge',
+  'overhead lunges': 'Overhead Lunge',
+  'overhead lunge': 'Overhead Lunge',
+  'front rack lunges': 'Front Rack Lunge',
+  'front rack lunge': 'Front Rack Lunge',
+};
+
+// Movements where a 1RM estimate is not meaningful
+const NON_1RM_MOVEMENTS = new Set([
+  'farmers carry', 'front rack carry', 'overhead carry', 'suitcase carry',
+  'run', 'row', 'bike', 'ski erg', 'assault bike', 'echo bike', 'bike erg',
+  'wall ball', 'burpee', 'bar-facing burpee', 'burpee box jump-over',
+  'box jump', 'box jump-over', 'box step-up',
+  'double-under', 'single-under',
+  'sit-up', 'ghd sit-up', 'toes-to-bar', 'knee-to-elbow',
+  'plank', 'l-sit', 'hollow hold', 'handstand hold',
+  'rope climb', 'sled push', 'sled pull', 'battle rope',
+  'air squat', 'pistol squat',
+  'pull-up', 'chest-to-bar pull-up', 'ring muscle-up', 'bar muscle-up',
+  'handstand push-up', 'strict handstand push-up',
+  'handstand walk', 'muscle-up',
+  'kettlebell swing', 'russian kettlebell swing', 'american kettlebell swing',
+]);
+
+function resolveMovementName(name: string): string {
+  const key = name.toLowerCase().trim();
+  return MOVEMENT_SYNONYMS[key] || name.trim();
+}
+
+function is1rmApplicable(name: string): boolean {
+  return !NON_1RM_MOVEMENTS.has(name.toLowerCase().trim());
+}
+
 let movementCache: Map<string, number> | null = null;
 
 async function getMovementMap(): Promise<Map<string, number>> {
@@ -188,17 +414,22 @@ async function getOrCreateMovement(
   movementType?: string,
   isWeighted?: boolean
 ): Promise<number> {
+  // Resolve synonyms before anything else
+  const canonicalName = resolveMovementName(name);
   const map = await getMovementMap();
-  const key = name.toLowerCase().trim();
+  const key = canonicalName.toLowerCase();
   if (map.has(key)) return map.get(key)!;
+
+  const is1rm = is1rmApplicable(canonicalName);
 
   try {
     const [inserted] = await db
       .insert(crossfitMovements)
       .values({
-        canonicalName: name.trim(),
+        canonicalName,
         movementType: movementType || null,
         isWeighted: isWeighted ?? false,
+        is1rmApplicable: is1rm,
       })
       .returning({ id: crossfitMovements.id });
     map.set(key, inserted.id);
@@ -208,13 +439,13 @@ async function getOrCreateMovement(
     const existing = await db
       .select({ id: crossfitMovements.id })
       .from(crossfitMovements)
-      .where(eq(crossfitMovements.canonicalName, name.trim()))
+      .where(eq(crossfitMovements.canonicalName, canonicalName))
       .limit(1);
     if (existing.length > 0) {
       map.set(key, existing[0].id);
       return existing[0].id;
     }
-    throw new Error(`Failed to create or find movement: ${name}`);
+    throw new Error(`Failed to create or find movement: ${canonicalName}`);
   }
 }
 
@@ -277,12 +508,89 @@ For each movement, provide:
 - is_limiting_factor: for scaled workouts, which movement(s) likely caused scaling
 - If the athlete provided personal notes, USE THEM for scaling attribution
 
+MOVEMENT NAMING RULES (CRITICAL — follow exactly):
+- Always use SINGULAR form: "Pull-Up" not "Pull-Ups", "Double-Under" not "Double-Unders", "Thruster" not "Thrusters"
+- Always QUALIFY lift variants — never use bare movement names:
+  - "Clean" alone is ambiguous. Use "Power Clean", "Squat Clean", or "Hang Power Clean" based on context.
+    If description says just "clean" with heavy weight/low reps, assume "Squat Clean".
+    If in a metcon with moderate weight, assume "Power Clean".
+  - "Snatch" alone is ambiguous. Use "Power Snatch" or "Squat Snatch". Same heuristic as cleans.
+  - "Press" → "Strict Press" unless context says "push press".
+  - "Jerk" → "Push Jerk" unless "split jerk" is specified.
+  - "Muscle-Up" alone → "Ring Muscle-Up". Only use "Bar Muscle-Up" if description explicitly says "bar muscle-up" or "BMU".
+- Equipment prefix rules:
+  - "DB" in description → prefix with "Dumbbell" (e.g., "Dumbbell Hang Squat Clean", "Dumbbell Snatch")
+  - "KB" in description → prefix with "Kettlebell" (e.g., "Kettlebell Swing", "Kettlebell Snatch")
+  - No prefix → assume barbell for standard lifts (clean, snatch, press, squat, deadlift, thruster)
+- Carries: always specify type — "Farmers Carry", "Front Rack Carry", "Overhead Carry"
+- Use these exact canonical forms when applicable:
+  Back Squat, Front Squat, Overhead Squat, Air Squat, Goblet Squat, Pistol Squat,
+  Deadlift, Romanian Deadlift, Sumo Deadlift High Pull,
+  Strict Press, Push Press, Push Jerk, Split Jerk,
+  Power Clean, Squat Clean, Hang Power Clean, Hang Squat Clean, Clean and Jerk,
+  Power Snatch, Squat Snatch, Hang Power Snatch,
+  Thruster, Wall Ball, Pull-Up, Chest-to-Bar Pull-Up,
+  Ring Muscle-Up, Bar Muscle-Up, Toes-to-Bar, Knee-to-Elbow,
+  Handstand Push-Up, Strict Handstand Push-Up, Handstand Walk,
+  Double-Under, Single-Under, Box Jump, Box Jump-Over, Box Step-Up,
+  Rope Climb, Burpee, Bar-Facing Burpee, GHD Sit-Up, Sit-Up,
+  Row, Ski Erg, Assault Bike, Echo Bike, Run,
+  Kettlebell Swing, Kettlebell Snatch,
+  Dumbbell Snatch, Dumbbell Clean, Dumbbell Thruster,
+  Lunge, Walking Lunge, Overhead Lunge, Front Rack Lunge,
+  Farmers Carry, Front Rack Carry, Overhead Carry
+
 For similarity_label, use lowercase-kebab-case strings grouping comparable workouts.
 
 Respond ONLY with a JSON array matching the input order. No markdown, no explanation.`;
 
-const BATCH_SIZE = 8;
+const ENRICHMENT_BATCH_SIZE = 12;
+const SCORE_BATCH_SIZE = 10;
 const MAX_CONCURRENT = 2;
+const HAIKU_BATCH_SIZE = 20;
+
+// ============================================================
+// HAIKU PRE-CLASSIFICATION (cheap tier for simple workouts)
+// ============================================================
+
+const HAIKU_CLASSIFY_PROMPT = `Classify each CrossFit workout. For each, return:
+- needs_deep_analysis: true if the scoring is ambiguous, has complex rep schemes with "for load" scoring, unusual movement combinations, or is hard to interpret. false if it's a straightforward metcon, named benchmark, simple strength session, or monthly challenge.
+- workout_type: for_time | amrap | for_load | emom | for_reps | tabata | accessory | other
+- is_monthly_challenge: true/false
+- basic_movements: array of movement names extracted from the description (use singular, qualified names)
+
+Respond ONLY with a JSON array matching input order.`;
+
+interface HaikuClassification {
+  needs_deep_analysis: boolean;
+  workout_type: string;
+  is_monthly_challenge: boolean;
+  basic_movements: string[];
+}
+
+async function classifyWorkoutsBatch(
+  client: Anthropic,
+  workouts: WorkoutForEnrichment[]
+): Promise<HaikuClassification[]> {
+  const prompt = workouts
+    .map(
+      (w, i) =>
+        `[${i + 1}] Title: "${w.rawTitle || ''}"
+    Description: "${w.rawDescription.replace(/"/g, '\\"').substring(0, 300)}"
+    Monthly Challenge Flag: ${w.isMonthlyChallenge}`
+    )
+    .join('\n\n');
+
+  const response = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 4096,
+    system: HAIKU_CLASSIFY_PROMPT,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  const text = response.content[0].type === 'text' ? response.content[0].text : '';
+  return parseJSONResponse(text, workouts.length);
+}
 
 function buildEnrichmentPrompt(workouts: WorkoutForEnrichment[]): string {
   return workouts
@@ -311,9 +619,21 @@ const SCORE_SYSTEM_PROMPT = `You are a CrossFit workout analyst. For each user s
 
 CRITICAL SCORING KNOWLEDGE:
 - PushPress "For load" workouts often record scores as "total_reps @ sum_of_all_weights" where the weight is the SUM across ALL sets.
+  Example: Push press 2-2-2-2-2 scored "10 @ 410" means 5 sets of 2 at varying weights totaling 410 (avg ~82 lbs/set).
 - Some workouts combine multiple lift maxes into one total.
 - "For time" workouts that hit the time cap get scored as total reps.
 - AMRAP scores are "rounds + reps" format.
+
+FOR LOAD / STRENGTH WORKOUTS — 1RM EXTRACTION (CRITICAL):
+When the rep scheme includes singles (e.g., 3-2-2-1-1-1, 5-3-1, 1-1-1-1-1):
+- The score typically represents the HEAVIEST weight lifted (the 1RM or near-1RM)
+- If score format is "X reps @ Y lbs" and the rep scheme ends with singles (building to heavy):
+  - estimated_max_weight = Y (the actual heaviest single), NOT an average
+  - Example: Back squat 3-2-2-1-1-1, score "10 @ 165" → estimated_max_weight = 165 (that's the heavy single)
+- If the rep scheme is all equal sets (2-2-2-2-2, 5-5-5) and score looks like a sum:
+  - score_type = "sum_of_weights", divide total by number of sets for average
+  - estimated_max_weight = average per set (or slightly above for ascending sets)
+- KEY SIGNAL: rep schemes ending in 1s (3-2-2-1-1-1, 5-3-1) mean "building to heavy single" — the score weight IS the max
 
 For each score, provide:
 - score_type: time | rounds_reps | reps | max_weight | sum_of_weights | combined_total | reps_at_fixed_weight | distance | calories | complete | unknown
@@ -321,8 +641,10 @@ For each score, provide:
 - Any relevant fields: total_weight_recorded, estimated_sets, estimated_max_weight, etc.
 
 For each movement in the workout, provide per-movement performance:
-- name: same canonical name as the workout's movement
-- estimated_actual_weight, estimated_max_weight, estimated_reps_completed
+- name: Use the SAME canonical movement name conventions as the enrichment stage. Always singular, always qualified (e.g., "Power Clean" not "Clean", "Ring Muscle-Up" not "Muscle-Up").
+- estimated_actual_weight: typical working weight across sets
+- estimated_max_weight: the HEAVIEST single-rep weight in this workout. For strength sessions with singles, this is the actual 1RM weight, not an average.
+- estimated_reps_completed: total reps completed across all sets
 - is_limiting_factor: for scaled workouts only
 - If personal notes explain scaling, USE THEM
 
@@ -374,7 +696,7 @@ async function analyzeScoreBatch(
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-20250514',
-    max_tokens: 8192,
+    max_tokens: 4096,
     system: SCORE_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: userMessage }],
   });
@@ -486,7 +808,9 @@ async function storeScoreResult(
 
   for (const perf of validPerf) {
     const movementMap = await getMovementMap();
-    const movementId = movementMap.get(perf.name.toLowerCase().trim());
+    // Resolve synonyms before looking up in catalog
+    const resolvedName = resolveMovementName(perf.name);
+    const movementId = movementMap.get(resolvedName.toLowerCase());
     if (!movementId) continue; // Movement wasn't in the catalog — skip
 
     await db.insert(crossfitUserMovementPerformance).values({
@@ -785,7 +1109,8 @@ async function runScalingInference(
         // Update movement performance records with scaling inferences
         for (const inf of inference.movements) {
           const movementMap = await getMovementMap();
-          const movementId = movementMap.get(inf.movement_name?.toLowerCase().trim() || '');
+          const resolvedName = resolveMovementName(inf.movement_name || '');
+          const movementId = movementMap.get(resolvedName.toLowerCase());
           if (!movementId) continue;
 
           // Find existing performance record for this score + movement
@@ -917,12 +1242,10 @@ export async function processAnalysisChunk(
   if (unenrichedWorkouts.length > 0) {
     const chunk = unenrichedWorkouts.slice(0, chunkSize);
 
-    // Heuristic pre-filter for trivial workouts
-    const needsLLM: WorkoutForEnrichment[] = [];
+    // Heuristic pre-filter for trivial monthly challenges
+    const needsClassification: WorkoutForEnrichment[] = [];
     for (const w of chunk) {
-      // Only skip truly trivial cases
       if (w.rawDescription.length < 80 && w.isMonthlyChallenge) {
-        // Simple monthly challenge — set fields directly
         const categoryId = await getOrCreateCategory('Monthly Challenge');
         await db
           .update(crossfitWorkouts)
@@ -937,15 +1260,57 @@ export async function processAnalysisChunk(
           .where(eq(crossfitWorkouts.id, w.id));
         processed++;
       } else {
-        needsLLM.push(w);
+        needsClassification.push(w);
       }
     }
 
-    // Batch LLM enrichment
-    if (needsLLM.length > 0) {
+    // Haiku pre-classification: route simple workouts away from Sonnet
+    const needsSonnet: WorkoutForEnrichment[] = [];
+    const simpleWorkouts: { workout: WorkoutForEnrichment; classification: HaikuClassification }[] = [];
+
+    if (needsClassification.length > 0) {
+      try {
+        // Classify in batches of 20 with Haiku (cheap)
+        const classifyBatches: WorkoutForEnrichment[][] = [];
+        for (let i = 0; i < needsClassification.length; i += HAIKU_BATCH_SIZE) {
+          classifyBatches.push(needsClassification.slice(i, i + HAIKU_BATCH_SIZE));
+        }
+
+        for (const batch of classifyBatches) {
+          const classifications = await classifyWorkoutsBatch(client, batch);
+          for (let k = 0; k < Math.min(classifications.length, batch.length); k++) {
+            const c = classifications[k];
+            if (c.needs_deep_analysis) {
+              needsSonnet.push(batch[k]);
+            } else {
+              simpleWorkouts.push({ workout: batch[k], classification: c });
+            }
+          }
+          // If Haiku returned fewer than expected, send the rest to Sonnet
+          for (let k = classifications.length; k < batch.length; k++) {
+            needsSonnet.push(batch[k]);
+          }
+        }
+      } catch (err) {
+        console.error('Haiku classification failed, falling back to Sonnet for all:', err);
+        needsSonnet.push(...needsClassification);
+      }
+    }
+
+    // Process simple workouts with Haiku classification (no Sonnet needed for enrichment)
+    // These still need Sonnet for full enrichment but the classification helps skip obvious ones
+    // Actually, for simple workouts we still need proper movement extraction, so send to Sonnet
+    // but in larger batches since we know they're straightforward
+    const allForSonnet = [
+      ...needsSonnet,
+      ...simpleWorkouts.map((s) => s.workout),
+    ];
+
+    // Batch LLM enrichment with larger batches for simple workouts
+    if (allForSonnet.length > 0) {
       const batches: WorkoutForEnrichment[][] = [];
-      for (let i = 0; i < needsLLM.length; i += BATCH_SIZE) {
-        batches.push(needsLLM.slice(i, i + BATCH_SIZE));
+      for (let i = 0; i < allForSonnet.length; i += ENRICHMENT_BATCH_SIZE) {
+        batches.push(allForSonnet.slice(i, i + ENRICHMENT_BATCH_SIZE));
       }
 
       for (let i = 0; i < batches.length; i += MAX_CONCURRENT) {
@@ -1008,8 +1373,8 @@ export async function processAnalysisChunk(
       }));
 
     const scoreBatches: ScoreForAnalysis[][] = [];
-    for (let i = 0; i < scoresToAnalyze.length; i += BATCH_SIZE) {
-      scoreBatches.push(scoresToAnalyze.slice(i, i + BATCH_SIZE));
+    for (let i = 0; i < scoresToAnalyze.length; i += SCORE_BATCH_SIZE) {
+      scoreBatches.push(scoresToAnalyze.slice(i, i + SCORE_BATCH_SIZE));
     }
 
     for (let i = 0; i < scoreBatches.length; i += MAX_CONCURRENT) {
@@ -1061,4 +1426,90 @@ export async function processAnalysisChunk(
     .where(eq(crossfitUsers.id, userId));
 
   return { processed, remaining: Math.max(remaining, 0), total: totalWork };
+}
+
+// ============================================================
+// MOVEMENT MERGE UTILITY (cleanup existing duplicates)
+// ============================================================
+
+/**
+ * Finds and merges duplicate movements in the database.
+ * Uses the synonym map to identify movements that should be the same.
+ * Returns a summary of what was merged.
+ */
+export async function mergeMovementDuplicates(): Promise<{
+  merged: { from: string; to: string; affectedWorkoutMovements: number; affectedPerformance: number }[];
+  updatedIs1rm: number;
+}> {
+  const allMovements = await db.select().from(crossfitMovements);
+  const merged: { from: string; to: string; affectedWorkoutMovements: number; affectedPerformance: number }[] = [];
+
+  // Build a map: canonical resolved name → list of movement rows
+  const resolvedGroups = new Map<string, typeof allMovements>();
+  for (const m of allMovements) {
+    const resolved = resolveMovementName(m.canonicalName).toLowerCase();
+    if (!resolvedGroups.has(resolved)) resolvedGroups.set(resolved, []);
+    resolvedGroups.get(resolved)!.push(m);
+  }
+
+  for (const [, group] of resolvedGroups) {
+    if (group.length <= 1) continue;
+
+    // Keep the one with the canonical resolved name; merge others into it
+    const canonicalName = resolveMovementName(group[0].canonicalName);
+    const keeper = group.find((m) => m.canonicalName === canonicalName) || group[0];
+    const toMerge = group.filter((m) => m.id !== keeper.id);
+
+    for (const dup of toMerge) {
+      // Update workout_movements FK
+      const wmUpdated = await db
+        .update(crossfitWorkoutMovements)
+        .set({ movementId: keeper.id })
+        .where(eq(crossfitWorkoutMovements.movementId, dup.id))
+        .returning({ id: crossfitWorkoutMovements.id });
+
+      // Update user_movement_performance FK
+      const perfUpdated = await db
+        .update(crossfitUserMovementPerformance)
+        .set({ movementId: keeper.id })
+        .where(eq(crossfitUserMovementPerformance.movementId, dup.id))
+        .returning({ id: crossfitUserMovementPerformance.id });
+
+      // Delete the duplicate movement
+      await db.delete(crossfitMovements).where(eq(crossfitMovements.id, dup.id));
+
+      merged.push({
+        from: dup.canonicalName,
+        to: keeper.canonicalName,
+        affectedWorkoutMovements: wmUpdated.length,
+        affectedPerformance: perfUpdated.length,
+      });
+    }
+
+    // Ensure keeper has the proper canonical name
+    if (keeper.canonicalName !== canonicalName) {
+      await db
+        .update(crossfitMovements)
+        .set({ canonicalName })
+        .where(eq(crossfitMovements.id, keeper.id));
+    }
+  }
+
+  // Update is_1rm_applicable for all movements based on the NON_1RM_MOVEMENTS set
+  let updatedIs1rm = 0;
+  for (const m of allMovements) {
+    const shouldBe = is1rmApplicable(m.canonicalName);
+    if (m.is1rmApplicable !== shouldBe) {
+      await db
+        .update(crossfitMovements)
+        .set({ is1rmApplicable: shouldBe })
+        .where(eq(crossfitMovements.id, m.id));
+      updatedIs1rm++;
+    }
+  }
+
+  // Reset movement cache after merge
+  movementCache = null;
+
+  return { merged, updatedIs1rm };
 }
