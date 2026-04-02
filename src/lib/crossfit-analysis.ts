@@ -9,7 +9,7 @@ import {
   crossfitWorkoutCategories,
   crossfitUsers,
 } from '@/db/schema';
-import { eq, and, isNull, inArray, asc } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
 
 // ============================================================
 // TYPES
@@ -83,12 +83,6 @@ interface ScoreValidationResult {
   };
 }
 
-interface ScalingInferenceResult {
-  movement_name: string;
-  inferred_scaling_detail: string;
-  is_limiting_factor: boolean;
-  confidence: 'high' | 'medium' | 'low';
-}
 
 // ============================================================
 // HELPERS
@@ -107,6 +101,21 @@ function parseNumeric(value: unknown): number | null {
 function parseInteger(value: unknown): number | null {
   const n = parseNumeric(value);
   return n != null ? Math.round(n) : null;
+}
+
+function inferScoreType(rawScore: string): string {
+  const s = rawScore.trim();
+  // Time format: MM:SS or H:MM:SS
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(s)) return 'time';
+  // Rounds+reps: "R + N" or "R+N"
+  if (/^\d+\s*\+\s*\d+$/.test(s)) return 'rounds_reps';
+  // Weight: "N @ W"
+  if (/^\d+\s*@\s*[\d.]+$/.test(s)) return 'max_weight';
+  // Pure number (reps, calories, distance)
+  if (/^\d+$/.test(s)) return 'reps';
+  // "Complete" or "Completed"
+  if (/^complet/i.test(s)) return 'complete';
+  return 'unknown';
 }
 
 function inferWorkoutType(descLower: string): string {
@@ -308,6 +317,9 @@ const MOVEMENT_SYNONYMS: Record<string, string> = {
 
   // Deadlifts
   'deadlifts': 'Deadlift',
+  'clean grip deadlift': 'Clean-Grip Deadlift',
+  'clean-grip deadlift': 'Clean-Grip Deadlift',
+  'clean deadlift': 'Clean-Grip Deadlift',
   'sumo deadlift high pull': 'Sumo Deadlift High Pull',
   'sumo deadlift high pulls': 'Sumo Deadlift High Pull',
   'sdhp': 'Sumo Deadlift High Pull',
@@ -363,6 +375,10 @@ const MOVEMENT_SYNONYMS: Record<string, string> = {
   'db thrusters': 'Dumbbell Thruster',
   'dumbbell thruster': 'Dumbbell Thruster',
   'dumbbell thrusters': 'Dumbbell Thruster',
+  'db push press': 'Dumbbell Push Press',
+  'db push presses': 'Dumbbell Push Press',
+  'dumbbell push press': 'Dumbbell Push Press',
+  'dumbbell push presses': 'Dumbbell Push Press',
 
   // Lunges
   'lunges': 'Lunge',
@@ -523,22 +539,16 @@ MOVEMENT NAMING RULES (CRITICAL — follow exactly):
   - "KB" in description → prefix with "Kettlebell" (e.g., "Kettlebell Swing", "Kettlebell Snatch")
   - No prefix → assume barbell for standard lifts (clean, snatch, press, squat, deadlift, thruster)
 - Carries: always specify type — "Farmers Carry", "Front Rack Carry", "Overhead Carry"
-- Use these exact canonical forms when applicable:
-  Back Squat, Front Squat, Overhead Squat, Air Squat, Goblet Squat, Pistol Squat,
-  Deadlift, Romanian Deadlift, Sumo Deadlift High Pull,
-  Strict Press, Push Press, Push Jerk, Split Jerk,
-  Power Clean, Squat Clean, Hang Power Clean, Hang Squat Clean, Clean and Jerk,
-  Power Snatch, Squat Snatch, Hang Power Snatch,
-  Thruster, Wall Ball, Pull-Up, Chest-to-Bar Pull-Up,
-  Ring Muscle-Up, Bar Muscle-Up, Toes-to-Bar, Knee-to-Elbow,
-  Handstand Push-Up, Strict Handstand Push-Up, Handstand Walk,
-  Double-Under, Single-Under, Box Jump, Box Jump-Over, Box Step-Up,
-  Rope Climb, Burpee, Bar-Facing Burpee, GHD Sit-Up, Sit-Up,
-  Row, Ski Erg, Assault Bike, Echo Bike, Run,
-  Kettlebell Swing, Kettlebell Snatch,
-  Dumbbell Snatch, Dumbbell Clean, Dumbbell Thruster,
-  Lunge, Walking Lunge, Overhead Lunge, Front Rack Lunge,
-  Farmers Carry, Front Rack Carry, Overhead Carry
+- You MUST map every movement to one of the canonical names below. If a movement does not match any name, use the closest match or declare a new name with justification.
+
+CANONICAL MOVEMENT LIST (use these exact names):
+BARBELL — Back Squat, Front Squat, Overhead Squat, Deadlift, Romanian Deadlift, Clean-Grip Deadlift, Sumo Deadlift High Pull, Strict Press, Push Press, Push Jerk, Split Jerk, Bench Press, Power Clean, Squat Clean, Hang Power Clean, Hang Squat Clean, Clean and Jerk, Power Snatch, Squat Snatch, Hang Power Snatch, Hang Squat Snatch, Thruster
+DUMBBELL — Dumbbell Snatch, Dumbbell Clean, Dumbbell Hang Clean, Dumbbell Hang Squat Clean, Dumbbell Thruster, Dumbbell Push Press
+KETTLEBELL — Kettlebell Swing, Russian Kettlebell Swing, American Kettlebell Swing, Kettlebell Snatch
+GYMNASTICS — Pull-Up, Chest-to-Bar Pull-Up, Ring Muscle-Up, Bar Muscle-Up, Toes-to-Bar, Knee-to-Elbow, Handstand Push-Up, Strict Handstand Push-Up, Handstand Walk, Rope Climb, Ring Dip, Strict Ring Dip, Pistol Squat
+BODYWEIGHT — Burpee, Bar-Facing Burpee, Burpee Box Jump-Over, Box Jump, Box Jump-Over, Box Step-Up, Sit-Up, GHD Sit-Up, Air Squat, Lunge, Walking Lunge, Overhead Lunge, Front Rack Lunge, Push-Up, Double-Under, Single-Under, Wall Ball
+MONOSTRUCTURAL — Row, Ski Erg, Assault Bike, Echo Bike, Bike Erg, Run
+CARRIES — Farmers Carry, Front Rack Carry, Overhead Carry, Suitcase Carry
 
 For similarity_label, use lowercase-kebab-case strings grouping comparable workouts.
 
@@ -615,7 +625,23 @@ function buildScorePrompt(scores: ScoreForAnalysis[]): string {
     .join('\n\n');
 }
 
-const SCORE_SYSTEM_PROMPT = `You are a CrossFit workout analyst. For each user score, interpret the score and extract per-movement performance data.
+function buildScoreSystemPrompt(gender?: string | null): string {
+  const genderGuidance = gender ? `
+PRESCRIBED WEIGHT CONVENTION (CRITICAL):
+CrossFit workouts use "female/male" notation for weights and heights.
+Example: "(95/135 lb)" means 95 lbs for women, 135 lbs for men.
+Example: "(20/24 in)" means 20-inch box for women, 24-inch for men.
+
+This user is: ${gender}
+- For Rx workouts: use the ${gender} prescribed weight as estimated_actual_weight
+  (${gender === 'female' ? 'FIRST number before the slash' : 'SECOND number after the slash'})
+- For Scaled workouts: DO NOT assume the user used the prescribed weight.
+  The user scaled some aspect of the workout but we don't know what.
+  Set estimated_actual_weight = null for scaled workouts unless the score
+  explicitly includes weight information (e.g., "1 @ 85").` : '';
+
+  return `You are a CrossFit workout analyst. For each user score, interpret the score and extract per-movement performance data.
+${genderGuidance}
 
 CRITICAL SCORING KNOWLEDGE:
 - PushPress "For load" workouts often record scores as "total_reps @ sum_of_all_weights" where the weight is the SUM across ALL sets.
@@ -634,6 +660,12 @@ When the rep scheme includes singles (e.g., 3-2-2-1-1-1, 5-3-1, 1-1-1-1-1):
   - score_type = "sum_of_weights", divide total by number of sets for average
   - estimated_max_weight = average per set (or slightly above for ascending sets)
 - KEY SIGNAL: rep schemes ending in 1s (3-2-2-1-1-1, 5-3-1) mean "building to heavy single" — the score weight IS the max
+
+SPECIAL CASE — All-singles schemes (1-1-1-1-1):
+When score is "N @ W" and N equals the number of singles, W is OFTEN the SUM
+of all singles (PushPress export format), NOT the weight per single.
+Divide W by N to get per-single weight. Verify: if W/N is consistent with
+the athlete's other performances for this movement, use W/N.
 
 For each score, provide:
 - score_type: time | rounds_reps | reps | max_weight | sum_of_weights | combined_total | reps_at_fixed_weight | distance | calories | complete | unknown
@@ -654,6 +686,7 @@ Respond ONLY with a JSON array matching input order. Each item:
   "movement_performance": [{ "name": "...", "estimated_actual_weight": ..., "estimated_max_weight": ..., "estimated_reps_completed": ..., "is_limiting_factor": false }],
   "summary": "brief one-line summary"
 }`;
+}
 
 async function analyzeEnrichmentBatch(
   client: Anthropic,
@@ -690,14 +723,15 @@ interface ScoreLLMResult {
 
 async function analyzeScoreBatch(
   client: Anthropic,
-  scores: ScoreForAnalysis[]
+  scores: ScoreForAnalysis[],
+  gender?: string | null
 ): Promise<ScoreLLMResult[]> {
   const userMessage = buildScorePrompt(scores);
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 4096,
-    system: SCORE_SYSTEM_PROMPT,
+    system: buildScoreSystemPrompt(gender),
     messages: [{ role: 'user', content: userMessage }],
   });
 
@@ -787,16 +821,181 @@ async function storeEnrichmentResult(
 // ============================================================
 // STAGE 3 + SCORE ANALYSIS: STORE SCORE RESULTS
 // ============================================================
+// DETERMINISTIC SCORE EXTRACTION (overrides LLM when possible)
+// ============================================================
+
+/**
+ * Parse rep scheme from description (e.g., "3-2-2-1-1-1" or "5-5-5")
+ */
+function parseRepScheme(description: string): number[] | null {
+  // Match patterns like "3-2-2-1-1-1", "5-5-5-5-5", "1-1-1-1-1"
+  const match = description.match(/\b(\d+(?:-\d+){2,})\b/);
+  if (!match) return null;
+  return match[1].split('-').map(Number);
+}
+
+/**
+ * Determine if a rep scheme ends in singles (building to heavy)
+ * e.g., 3-2-2-1-1-1 or 5-3-1
+ */
+function endsInSingles(scheme: number[]): boolean {
+  if (scheme.length < 2) return false;
+  const lastTwo = scheme.slice(-2);
+  return lastTwo.every((r) => r === 1);
+}
+
+/**
+ * Determine if a rep scheme is all equal sets (e.g., 5-5-5, 2-2-2-2-2)
+ */
+function isUniformScheme(scheme: number[]): boolean {
+  if (scheme.length < 2) return false;
+  return scheme.every((r) => r === scheme[0]);
+}
+
+/**
+ * Determine if a rep scheme is all singles (e.g., 1-1-1-1-1)
+ */
+function isAllSingles(scheme: number[]): boolean {
+  return scheme.length >= 2 && scheme.every((r) => r === 1);
+}
+
+/**
+ * Attempt deterministic score extraction for "for load" workouts.
+ * Returns corrected estimated_max_weight if deterministic parsing is possible.
+ */
+function deterministicScoreExtraction(
+  rawScore: string,
+  rawDescription: string,
+): { maxWeight: number; scoreType: string; confidence: string } | null {
+  // Match "N @ W" pattern
+  const scoreMatch = rawScore.trim().match(/^(\d+)\s*@\s*([\d.]+)$/);
+  if (!scoreMatch) return null;
+
+  const totalReps = parseInt(scoreMatch[1]);
+  const weight = parseFloat(scoreMatch[2]);
+  if (isNaN(totalReps) || isNaN(weight) || weight <= 0) return null;
+
+  const scheme = parseRepScheme(rawDescription);
+  if (!scheme) return null;
+
+  const totalSchemeReps = scheme.reduce((a, b) => a + b, 0);
+  const numSets = scheme.length;
+
+  // Case 1: Scheme ends in singles (3-2-2-1-1-1, 5-3-1)
+  // Weight IS the max (the heavy single)
+  if (endsInSingles(scheme) && !isAllSingles(scheme)) {
+    return { maxWeight: weight, scoreType: 'max_weight', confidence: 'high' };
+  }
+
+  // Case 2: All singles (1-1-1-1-1)
+  // "N @ W" where N = number of singles → W is likely the SUM
+  if (isAllSingles(scheme) && totalReps === numSets) {
+    const perSingle = weight / numSets;
+    return { maxWeight: perSingle, scoreType: 'sum_of_weights', confidence: 'high' };
+  }
+
+  // Case 3: Uniform rep scheme (5-5-5, 2-2-2-2-2, 3-3-3-3-3)
+  // "N @ W" where N = total reps → W is likely the SUM across all sets
+  if (isUniformScheme(scheme) && totalReps === totalSchemeReps) {
+    const perSet = weight / numSets;
+    return { maxWeight: perSet, scoreType: 'sum_of_weights', confidence: 'high' };
+  }
+
+  // Case 4: Uniform rep scheme but N doesn't match exactly
+  // Still likely a sum if weight seems too high for the movement
+  if (isUniformScheme(scheme) && weight > 200) {
+    const perSet = weight / numSets;
+    return { maxWeight: perSet, scoreType: 'sum_of_weights', confidence: 'medium' };
+  }
+
+  return null;
+}
+
+// ============================================================
+// WEIGHT SANITY BOUNDS PER MOVEMENT CATEGORY
+// ============================================================
+
+const WEIGHT_CEILINGS: Record<string, number> = {
+  // Olympic lifts
+  'Snatch': 300, 'Power Snatch': 300, 'Squat Snatch': 300,
+  'Hang Power Snatch': 300, 'Hang Squat Snatch': 300,
+  'Clean and Jerk': 400,
+  // Jerks
+  'Push Jerk': 300, 'Split Jerk': 350,
+  // Cleans
+  'Power Clean': 350, 'Squat Clean': 400,
+  'Hang Power Clean': 350, 'Hang Squat Clean': 350,
+  // Pressing
+  'Strict Press': 250, 'Push Press': 300,
+  'Bench Press': 350,
+  // Powerlifts
+  'Back Squat': 500, 'Front Squat': 400, 'Overhead Squat': 350,
+  'Deadlift': 600,
+};
+
+const DEFAULT_WEIGHT_CEILING = 500;
+
+function getWeightCeiling(movementName: string): number {
+  return WEIGHT_CEILINGS[movementName] || DEFAULT_WEIGHT_CEILING;
+}
+
+/**
+ * Apply weight sanity bounds. If a weight exceeds the ceiling for a movement,
+ * it's likely a sum-of-weights — try to divide by likely number of sets.
+ */
+function sanitizeWeight(
+  weight: number | null,
+  movementName: string,
+  rawDescription: string,
+): number | null {
+  if (weight === null || weight <= 0) return weight;
+
+  const ceiling = getWeightCeiling(movementName);
+  if (weight <= ceiling) return weight;
+
+  // Likely a sum-of-weights — try to divide by number of sets
+  const scheme = parseRepScheme(rawDescription);
+  if (scheme) {
+    const numSets = scheme.length;
+    const corrected = weight / numSets;
+    if (corrected <= ceiling) return corrected;
+  }
+
+  // If still too high, flag as unreliable
+  return null;
+}
+
+// ============================================================
 
 async function storeScoreResult(
   scoreId: number,
-  result: ScoreLLMResult
+  result: ScoreLLMResult,
+  rawScore?: string,
+  rawDescription?: string
 ): Promise<void> {
+  // Apply deterministic score extraction override if possible
+  let scoreType = result.score_interpretation?.score_type || 'unknown';
+  let deterministicMax: number | null = null;
+
+  if (rawScore && rawDescription) {
+    const deterministic = deterministicScoreExtraction(rawScore, rawDescription);
+    if (deterministic && deterministic.confidence === 'high') {
+      scoreType = deterministic.scoreType;
+      deterministicMax = deterministic.maxWeight;
+    }
+  }
+
   await db
     .update(crossfitUserScores)
     .set({
-      scoreType: result.score_interpretation?.score_type || 'unknown',
-      aiScoreInterpretation: JSON.stringify(result.score_interpretation),
+      scoreType,
+      aiScoreInterpretation: JSON.stringify({
+        ...result.score_interpretation,
+        ...(deterministicMax !== null ? {
+          deterministic_override: true,
+          deterministic_max_weight: deterministicMax,
+        } : {}),
+      }),
       aiAnalysis: JSON.stringify(result),
     })
     .where(eq(crossfitUserScores.id, scoreId));
@@ -808,19 +1007,37 @@ async function storeScoreResult(
 
   for (const perf of validPerf) {
     const movementMap = await getMovementMap();
-    // Resolve synonyms before looking up in catalog
     const resolvedName = resolveMovementName(perf.name);
     const movementId = movementMap.get(resolvedName.toLowerCase());
-    if (!movementId) continue; // Movement wasn't in the catalog — skip
+    if (!movementId) continue;
+
+    // Use deterministic max if available, otherwise use LLM estimate
+    let estimatedMaxWeight = parseNumeric(perf.estimated_max_weight);
+    let estimatedActualWeight = parseNumeric(perf.estimated_actual_weight);
+
+    // Override with deterministic extraction for the primary movement
+    if (deterministicMax !== null && estimatedMaxWeight !== null) {
+      // If deterministic differs significantly from LLM, trust deterministic
+      if (Math.abs(estimatedMaxWeight - deterministicMax) > 10) {
+        estimatedMaxWeight = deterministicMax;
+        estimatedActualWeight = deterministicMax;
+      }
+    }
+
+    // Apply weight sanity bounds
+    if (rawDescription) {
+      estimatedMaxWeight = sanitizeWeight(estimatedMaxWeight, resolvedName, rawDescription);
+      estimatedActualWeight = sanitizeWeight(estimatedActualWeight, resolvedName, rawDescription);
+    }
 
     await db.insert(crossfitUserMovementPerformance).values({
       userScoreId: scoreId,
       movementId,
-      estimatedActualWeight: parseNumeric(perf.estimated_actual_weight),
-      estimatedMaxWeight: parseNumeric(perf.estimated_max_weight),
+      estimatedActualWeight,
+      estimatedMaxWeight,
       estimatedRepsCompleted: parseInteger(perf.estimated_reps_completed),
       isLimitingFactor: perf.is_limiting_factor ?? false,
-      confidence: 'medium',
+      confidence: deterministicMax !== null ? 'high' : 'medium',
     });
   }
 }
@@ -994,34 +1211,19 @@ async function runScoreValidation(
 // STAGE 5: SCALING INFERENCE
 // ============================================================
 
-const SCALING_SYSTEM_PROMPT = `This athlete did the following workout(s) SCALED (not Rx).
-PushPress does not export workout notes, so we don't know exactly what they modified.
-
-For each scaled workout, given the Rx description and the athlete's Rx history for each movement, infer:
-1. Which movement(s) did they MOST LIKELY scale?
-2. What modification did they probably make?
-   Common patterns: ring muscle-ups → pull-ups, handstand push-ups → DB push press, heavy barbell → lighter weight, rope climbs → half height, box jumps → step-ups, double-unders → single-unders, pistols → air squats
-3. Confidence level:
-   - HIGH: athlete has never done this movement Rx in any workout
-   - MEDIUM: athlete sometimes does it Rx, sometimes not
-   - LOW: athlete usually does it Rx (they may have scaled weight only)
-
-Respond with JSON array, one item per workout:
-[{ "movements": [{ "name": "...", "inferred_scaling_detail": "...", "is_limiting_factor": true/false, "confidence": "high|medium|low" }] }]
-
-No markdown.`;
-
+/**
+ * Deterministic scaling inference — replaces the LLM-based Stage 5.
+ * Uses Rx history per movement to determine which movements were likely scaled.
+ */
 async function runScalingInference(
-  client: Anthropic,
+  _client: Anthropic,
   userId: number
 ): Promise<void> {
-  // Get scaled scores without notes (notes would already explain scaling)
+  // Get scaled scores
   const scaledScores = await db
     .select({
       id: crossfitUserScores.id,
       workoutId: crossfitUserScores.workoutId,
-      rawScore: crossfitUserScores.rawScore,
-      rawNotes: crossfitUserScores.rawNotes,
     })
     .from(crossfitUserScores)
     .where(
@@ -1031,9 +1233,7 @@ async function runScalingInference(
       )
     );
 
-  // Only infer for scores without notes
-  const needsInference = scaledScores.filter((s) => !s.rawNotes?.trim());
-  if (needsInference.length === 0) return;
+  if (scaledScores.length === 0) return;
 
   // Get user's Rx history for movements
   const rxScores = await db
@@ -1058,96 +1258,75 @@ async function runScalingInference(
     for (const p of rxPerf) rxMovementIds.add(p.movementId);
   }
 
-  // Process in batches of 10
-  for (let i = 0; i < needsInference.length; i += 10) {
-    const batch = needsInference.slice(i, i + 10);
-    const prompts: string[] = [];
+  // Build per-movement Rx rate
+  const allUserScoreIds = [...rxScoreIds, ...scaledScores.map((s) => s.id)];
+  const allPerf = allUserScoreIds.length > 0 ? await db
+    .select({
+      userScoreId: crossfitUserMovementPerformance.userScoreId,
+      movementId: crossfitUserMovementPerformance.movementId,
+    })
+    .from(crossfitUserMovementPerformance)
+    .where(inArray(crossfitUserMovementPerformance.userScoreId, allUserScoreIds)) : [];
 
-    for (const score of batch) {
-      const workout = await db
-        .select({ rawDescription: crossfitWorkouts.rawDescription })
-        .from(crossfitWorkouts)
-        .where(eq(crossfitWorkouts.id, score.workoutId))
+  const rxScoreIdSet = new Set(rxScoreIds);
+  const movementRxCounts = new Map<number, { rx: number; total: number }>();
+  for (const p of allPerf) {
+    const counts = movementRxCounts.get(p.movementId) || { rx: 0, total: 0 };
+    counts.total++;
+    if (rxScoreIdSet.has(p.userScoreId)) counts.rx++;
+    movementRxCounts.set(p.movementId, counts);
+  }
+
+  // Process each scaled score
+  for (const score of scaledScores) {
+    const perfRecords = await db
+      .select({
+        id: crossfitUserMovementPerformance.id,
+        movementId: crossfitUserMovementPerformance.movementId,
+        inferredScalingDetail: crossfitUserMovementPerformance.inferredScalingDetail,
+      })
+      .from(crossfitUserMovementPerformance)
+      .where(eq(crossfitUserMovementPerformance.userScoreId, score.id));
+
+    // Skip if already has scaling detail
+    if (perfRecords.length > 0 && perfRecords.every((p) => p.inferredScalingDetail)) continue;
+
+    for (const perf of perfRecords) {
+      if (perf.inferredScalingDetail) continue;
+
+      const hasEverRxd = rxMovementIds.has(perf.movementId);
+      const counts = movementRxCounts.get(perf.movementId);
+      const rxRate = counts && counts.total > 0 ? counts.rx / counts.total : 0;
+
+      const movementRow = await db
+        .select({ canonicalName: crossfitMovements.canonicalName })
+        .from(crossfitMovements)
+        .where(eq(crossfitMovements.id, perf.movementId))
         .limit(1);
+      const movementName = movementRow[0]?.canonicalName || 'this movement';
 
-      if (workout.length === 0) continue;
+      let confidence: string;
+      let isLimitingFactor: boolean;
+      let inferredScalingDetail: string;
 
-      const workoutMovements = await db
-        .select({
-          movementId: crossfitWorkoutMovements.movementId,
-          canonicalName: crossfitMovements.canonicalName,
-        })
-        .from(crossfitWorkoutMovements)
-        .innerJoin(crossfitMovements, eq(crossfitWorkoutMovements.movementId, crossfitMovements.id))
-        .where(eq(crossfitWorkoutMovements.workoutId, score.workoutId));
-
-      const movementRxHistory = workoutMovements.map((m) => ({
-        name: m.canonicalName,
-        hasRxHistory: rxMovementIds.has(m.movementId),
-      }));
-
-      prompts.push(`Score ID: ${score.id}\nWorkout: ${workout[0].rawDescription.substring(0, 300)}\nScore: ${score.rawScore}\nMovement Rx history:\n${movementRxHistory.map((m) => `  ${m.name}: ${m.hasRxHistory ? 'Has done Rx' : 'Never done Rx'}`).join('\n')}`);
-    }
-
-    if (prompts.length === 0) continue;
-
-    try {
-      const response = await client.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
-        system: SCALING_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: prompts.join('\n\n---\n\n') }],
-      });
-
-      const text = response.content[0].type === 'text' ? response.content[0].text : '';
-      const inferences: { movements: ScalingInferenceResult[] }[] = parseJSONResponse(text, prompts.length);
-
-      for (let j = 0; j < Math.min(inferences.length, batch.length); j++) {
-        const scoreId = batch[j].id;
-        const inference = inferences[j];
-
-        // Update movement performance records with scaling inferences
-        for (const inf of inference.movements) {
-          const movementMap = await getMovementMap();
-          const resolvedName = resolveMovementName(inf.movement_name || '');
-          const movementId = movementMap.get(resolvedName.toLowerCase());
-          if (!movementId) continue;
-
-          // Find existing performance record for this score + movement
-          const existingPerf = await db
-            .select({ id: crossfitUserMovementPerformance.id })
-            .from(crossfitUserMovementPerformance)
-            .where(
-              and(
-                eq(crossfitUserMovementPerformance.userScoreId, scoreId),
-                eq(crossfitUserMovementPerformance.movementId, movementId)
-              )
-            )
-            .limit(1);
-
-          if (existingPerf.length > 0) {
-            await db
-              .update(crossfitUserMovementPerformance)
-              .set({
-                inferredScalingDetail: inf.inferred_scaling_detail,
-                isLimitingFactor: inf.is_limiting_factor,
-                confidence: inf.confidence,
-              })
-              .where(eq(crossfitUserMovementPerformance.id, existingPerf[0].id));
-          } else {
-            await db.insert(crossfitUserMovementPerformance).values({
-              userScoreId: scoreId,
-              movementId,
-              inferredScalingDetail: inf.inferred_scaling_detail,
-              isLimitingFactor: inf.is_limiting_factor,
-              confidence: inf.confidence,
-            });
-          }
-        }
+      if (!hasEverRxd) {
+        confidence = 'high';
+        isLimitingFactor = true;
+        inferredScalingDetail = `Never performed ${movementName} Rx — likely substituted or modified`;
+      } else if (rxRate < 0.5) {
+        confidence = 'medium';
+        isLimitingFactor = true;
+        inferredScalingDetail = `Scales ${movementName} more often than not — likely a limiting factor`;
+      } else {
+        confidence = 'low';
+        isLimitingFactor = false;
+        inferredScalingDetail = `Usually performs ${movementName} Rx — likely scaled weight only`;
       }
-    } catch (err) {
-      console.error('Scaling inference batch failed:', err);
-      // Non-fatal
+
+      await db
+        .update(crossfitUserMovementPerformance)
+        .set({ inferredScalingDetail, isLimitingFactor, confidence })
+        .where(eq(crossfitUserMovementPerformance.id, perf.id));
     }
   }
 }
@@ -1158,7 +1337,8 @@ async function runScalingInference(
 
 export async function processAnalysisChunk(
   userId: number,
-  chunkSize: number = 20
+  chunkSize: number = 20,
+  userGender?: string | null
 ): Promise<{ processed: number; remaining: number; total: number }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
@@ -1359,7 +1539,7 @@ export async function processAnalysisChunk(
 
     const descMap = new Map(workoutDescs.map((w) => [w.id, w]));
 
-    const scoresToAnalyze: ScoreForAnalysis[] = unanalyzedScores
+    const allScores = unanalyzedScores
       .slice(0, chunkSize)
       .map((s) => ({
         id: s.id,
@@ -1372,6 +1552,53 @@ export async function processAnalysisChunk(
         rawTitle: descMap.get(s.workoutId)?.rawTitle || null,
       }));
 
+    // Separate scaled (skip LLM) from Rx (needs LLM analysis)
+    const scaledScores = allScores.filter((s) => s.rawDivision?.toLowerCase() === 'scaled');
+    const rxScores = allScores.filter((s) => s.rawDivision?.toLowerCase() !== 'scaled');
+
+    // Handle scaled scores deterministically — no LLM needed
+    for (const score of scaledScores) {
+      // Get workout movements from enrichment data
+      const workoutMovements = await db
+        .select({
+          movementId: crossfitWorkoutMovements.movementId,
+          canonicalName: crossfitMovements.canonicalName,
+        })
+        .from(crossfitWorkoutMovements)
+        .innerJoin(crossfitMovements, eq(crossfitWorkoutMovements.movementId, crossfitMovements.id))
+        .where(eq(crossfitWorkoutMovements.workoutId, score.workoutId));
+
+      // Create movement performance records with null weights
+      for (const m of workoutMovements) {
+        await db.insert(crossfitUserMovementPerformance).values({
+          userScoreId: score.id,
+          movementId: m.movementId,
+          estimatedActualWeight: null,
+          estimatedMaxWeight: null,
+          estimatedRepsCompleted: null,
+          isLimitingFactor: false,
+          confidence: 'low',
+        });
+      }
+
+      // Determine score type from raw score pattern
+      const scoreType = inferScoreType(score.rawScore);
+
+      await db
+        .update(crossfitUserScores)
+        .set({
+          scoreType,
+          aiScoreInterpretation: JSON.stringify({ score_type: scoreType, confidence: 'medium', scaled: true }),
+          aiAnalysis: JSON.stringify({ source: 'deterministic_scaled', summary: 'Scaled workout — weight data unknown' }),
+        })
+        .where(eq(crossfitUserScores.id, score.id));
+
+      processed++;
+    }
+
+    // Only send Rx scores to LLM
+    const scoresToAnalyze = rxScores;
+
     const scoreBatches: ScoreForAnalysis[][] = [];
     for (let i = 0; i < scoresToAnalyze.length; i += SCORE_BATCH_SIZE) {
       scoreBatches.push(scoresToAnalyze.slice(i, i + SCORE_BATCH_SIZE));
@@ -1380,7 +1607,7 @@ export async function processAnalysisChunk(
     for (let i = 0; i < scoreBatches.length; i += MAX_CONCURRENT) {
       const concurrentBatches = scoreBatches.slice(i, i + MAX_CONCURRENT);
       const results = await Promise.allSettled(
-        concurrentBatches.map((batch) => analyzeScoreBatch(client, batch))
+        concurrentBatches.map((batch) => analyzeScoreBatch(client, batch, userGender))
       );
 
       for (let j = 0; j < results.length; j++) {
@@ -1389,7 +1616,7 @@ export async function processAnalysisChunk(
 
         if (result.status === 'fulfilled') {
           for (let k = 0; k < result.value.length; k++) {
-            await storeScoreResult(batch[k].id, result.value[k]);
+            await storeScoreResult(batch[k].id, result.value[k], batch[k].rawScore, batch[k].rawDescription);
             processed++;
           }
         } else {

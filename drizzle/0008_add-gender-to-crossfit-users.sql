@@ -1,0 +1,1 @@
+ALTER TABLE "crossfit_users" ADD COLUMN "gender" varchar(10);

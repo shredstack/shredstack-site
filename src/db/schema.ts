@@ -39,6 +39,8 @@ export const crossfitUsers = pgTable('crossfit_users', {
   id: serial('id').primaryKey(),
   email: varchar('email', { length: 255 }).unique().notNull(),
   displayName: varchar('display_name', { length: 255 }),
+  gender: varchar('gender', { length: 10 }),
+  // 'female' | 'male' | null
   lastUploadAt: timestamp('last_upload_at', { withTimezone: true }),
   analysisStatus: varchar('analysis_status', { length: 50 }).default('none'),
   // 'none' | 'pending' | 'analyzing' | 'complete' | 'error'

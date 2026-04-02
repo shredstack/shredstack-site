@@ -3,6 +3,7 @@ export interface DashboardData {
     displayName: string | null;
     email: string;
     lastUploadAt: string | null;
+    gender: string | null;
   };
   summary: {
     totalScores: number;

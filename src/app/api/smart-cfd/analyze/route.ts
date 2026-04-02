@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { db } from '@/db';
+import { crossfitUsers } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 import { verifySession } from '@/lib/smart-cfd-auth';
 import { processAnalysisChunk } from '@/lib/crossfit-analysis';
 
@@ -11,7 +14,14 @@ export async function POST() {
   }
 
   try {
-    const result = await processAnalysisChunk(session.userId);
+    // Get user gender for score analysis
+    const user = await db
+      .select({ gender: crossfitUsers.gender })
+      .from(crossfitUsers)
+      .where(eq(crossfitUsers.id, session.userId))
+      .limit(1);
+
+    const result = await processAnalysisChunk(session.userId, 20, user[0]?.gender);
 
     return NextResponse.json({
       processed: result.processed,

@@ -132,6 +132,7 @@ export async function buildDashboardResponse(
       displayName: user.displayName,
       email: user.email,
       lastUploadAt: user.lastUploadAt,
+      gender: user.gender ?? null,
     },
     summary: {
       totalScores: realScores.length,
@@ -189,7 +190,7 @@ function computeStrengthPRs(
     isWeighted: boolean | null;
     is1rmApplicable?: boolean | null;
   }[],
-  scores: { scoreId: number; workoutDate: Date; aiScoreInterpretation: string | null }[]
+  scores: { scoreId: number; workoutDate: Date; aiScoreInterpretation: string | null; scoreType: string | null; workoutType: string | null }[]
 ): Record<string, {
   estimatedMax: number;
   bestReps: number | null;
@@ -202,12 +203,21 @@ function computeStrengthPRs(
 }> {
   const scoreMap = new Map(scores.map((s) => [s.scoreId, s]));
 
+  // Build set of combined-total score IDs to exclude from strength tracking
+  const combinedTotalScoreIds = new Set(
+    scores
+      .filter((s) => s.scoreType === 'combined_total')
+      .map((s) => s.scoreId)
+  );
+
   // Group by movement name — filter out non-1RM-applicable movements
   const byLift = new Map<string, typeof performance>();
   for (const p of performance) {
     if (!p.estimatedMaxWeight || !p.isWeighted) continue;
     // Skip movements where 1RM is meaningless (carries, runs, wall balls, etc.)
     if (p.is1rmApplicable === false) continue;
+    // Exclude combined-total workouts (e.g., "Sum of the Best of Each Lift")
+    if (combinedTotalScoreIds.has(p.userScoreId)) continue;
     if (!byLift.has(p.canonicalName)) byLift.set(p.canonicalName, []);
     byLift.get(p.canonicalName)!.push(p);
   }
@@ -264,7 +274,7 @@ function computeStrengthPRs(
       } catch { /* ignore */ }
     }
 
-    // Projected 1RM: if best tested 1RM is >2 months old and we have recent metcon data
+    // Projected 1RM: if best tested 1RM is >2 months old and we have recent strength data
     let projected1RM: number | null = null;
     let projectedFrom: string | null = null;
 
@@ -273,22 +283,24 @@ function computeStrengthPRs(
     twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
 
     if (bestDate && bestDate < twoMonthsAgo && lowRep.length > 0) {
-      // Gather metcon performances (>3 reps) after the best 1RM test
-      const recentHighRep = liftPerf.filter((p) => {
+      // Only use for_load workout data for projections (exclude metcon performances)
+      const recentForLoad = liftPerf.filter((p) => {
         const score = scoreMap.get(p.userScoreId);
         if (!score || !p.estimatedMaxWeight) return false;
         const pDate = score.workoutDate;
         const reps = p.estimatedRepsCompleted;
-        return pDate > bestDate && reps !== null && reps > 3;
+        // Only include for_load workouts, cap reps at 10 for formula reliability
+        return pDate > bestDate && reps !== null && reps > 1 && reps <= 10
+          && score.workoutType === 'for_load';
       });
 
-      if (recentHighRep.length >= 3) {
+      if (recentForLoad.length >= 3) {
         // Use Epley and Brzycki formulas to estimate 1RM from each recent performance
         const estimates: number[] = [];
-        for (const p of recentHighRep) {
+        for (const p of recentForLoad) {
           const w = p.estimatedMaxWeight!;
           const r = p.estimatedRepsCompleted!;
-          if (r > 0 && r <= 15 && w > 0) {
+          if (r > 0 && r <= 10 && w > 0) {
             const epley = w * (1 + r / 30);
             const brzycki = r === 1 ? w : w * 36 / (37 - r);
             estimates.push((epley + brzycki) / 2);
@@ -296,14 +308,23 @@ function computeStrengthPRs(
         }
 
         if (estimates.length >= 3) {
-          // Take the highest recent estimate
-          const highestEstimate = Math.max(...estimates);
+          // Use MEDIAN instead of max — resistant to outliers
+          estimates.sort((a, b) => a - b);
+          const mid = Math.floor(estimates.length / 2);
+          const medianEstimate = estimates.length % 2 === 0
+            ? (estimates[mid - 1] + estimates[mid]) / 2
+            : estimates[mid];
+
           const tested1RM = best.estimatedMaxWeight!;
 
+          // Cap projection at 15% above tested 1RM (sanity bound)
+          const maxProjection = tested1RM * 1.15;
+          const capped = Math.min(medianEstimate, maxProjection);
+
           // Only project upward — don't project lower than tested 1RM
-          if (highestEstimate > tested1RM) {
-            projected1RM = Math.round(highestEstimate);
-            projectedFrom = 'recent training trend';
+          if (capped > tested1RM) {
+            projected1RM = Math.round(capped);
+            projectedFrom = 'recent strength sessions';
           }
         }
       }
