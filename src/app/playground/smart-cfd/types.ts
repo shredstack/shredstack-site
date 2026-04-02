@@ -59,6 +59,8 @@ export interface StrengthPR {
   rawScoreMisinterpretation: string | null;
   confidence: string;
   history: { date: string; weight: number }[];
+  projected1RM: number | null;
+  projectedFrom: string | null;
 }
 
 export interface RepeatWorkoutProgression {

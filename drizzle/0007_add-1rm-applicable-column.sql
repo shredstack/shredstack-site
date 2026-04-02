@@ -1,0 +1,1 @@
+ALTER TABLE "crossfit_movements" ADD COLUMN "is_1rm_applicable" boolean DEFAULT true;

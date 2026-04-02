@@ -17,7 +17,7 @@ export async function POST() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Get all score IDs for this user
+  // Get all score IDs and workout IDs for this user
   const userScores = await db
     .select({ id: crossfitUserScores.id, workoutId: crossfitUserScores.workoutId })
     .from(crossfitUserScores)
@@ -26,26 +26,32 @@ export async function POST() {
   const scoreIds = userScores.map((s) => s.id);
   const workoutIds = [...new Set(userScores.map((s) => s.workoutId))];
 
-  // Delete movement performance records (FK to user scores)
+  // Delete AI-generated movement performance records (FK to user scores)
   if (scoreIds.length > 0) {
     await db
       .delete(crossfitUserMovementPerformance)
       .where(inArray(crossfitUserMovementPerformance.userScoreId, scoreIds));
   }
 
-  // Delete user scores
-  await db
-    .delete(crossfitUserScores)
-    .where(eq(crossfitUserScores.userId, session.userId));
+  // Clear AI fields on user scores (keep raw data: rawScore, rawDivision, rawNotes)
+  if (scoreIds.length > 0) {
+    await db
+      .update(crossfitUserScores)
+      .set({
+        scoreType: null,
+        aiScoreInterpretation: null,
+        aiAnalysis: null,
+      })
+      .where(eq(crossfitUserScores.userId, session.userId));
+  }
 
-  // Delete workout-movement junction records for workouts that only this user used
-  // (For a playground with few users, just clean up workout movements and re-enrich)
+  // Delete workout-movement junction records and clear AI enrichment on workouts
   if (workoutIds.length > 0) {
     await db
       .delete(crossfitWorkoutMovements)
       .where(inArray(crossfitWorkoutMovements.workoutId, workoutIds));
 
-    // Clear AI enrichment fields on workouts so they get re-enriched
+    // Clear AI enrichment fields (keep raw data: rawTitle, rawDescription, descriptionHash)
     for (const wid of workoutIds) {
       await db
         .update(crossfitWorkouts)
@@ -62,6 +68,12 @@ export async function POST() {
     }
   }
 
+  // Delete orphaned movements (they'll be recreated with proper names during re-analysis)
+  await db.execute(sql`
+    DELETE FROM crossfit_movements
+    WHERE id NOT IN (SELECT DISTINCT movement_id FROM crossfit_workout_movements)
+  `);
+
   // Reset user status
   await db
     .update(crossfitUsers)
@@ -73,5 +85,5 @@ export async function POST() {
     })
     .where(eq(crossfitUsers.id, session.userId));
 
-  return NextResponse.json({ message: 'Analysis reset. Raw workout data preserved for re-analysis.' });
+  return NextResponse.json({ message: 'AI analysis reset. Raw scores and workouts preserved for re-analysis.' });
 }

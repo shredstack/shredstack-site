@@ -63,13 +63,26 @@ function StrengthCard({ name, pr }: { name: string; pr: StrengthPR }) {
           <h3 className="text-sm font-medium text-surface-400 uppercase tracking-wider">{name}</h3>
           <div className="text-3xl font-bold text-white mt-1">~{Math.round(pr.estimatedMax)} lbs</div>
           <div className="text-surface-400 text-xs mt-1">
-            Estimated 1RM
+            Tested 1RM
             <span className={`ml-2 ${confidenceColor}`}>
               ({pr.confidence} confidence)
             </span>
           </div>
         </div>
       </div>
+
+      {/* Projected 1RM */}
+      {pr.projected1RM && (
+        <div className="bg-accent-500/10 border border-accent-500/20 border-dashed rounded-lg p-3 mb-3">
+          <div className="flex items-baseline gap-2">
+            <span className="text-accent-400 text-lg font-semibold">~{pr.projected1RM} lbs</span>
+            <span className="text-accent-400/70 text-xs">Projected 1RM</span>
+          </div>
+          <p className="text-accent-400/60 text-xs mt-1">
+            Based on {pr.projectedFrom} — test to confirm!
+          </p>
+        </div>
+      )}
 
       {/* Best logged */}
       {pr.bestWeight && (
