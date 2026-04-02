@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { DashboardData, DashboardWorkout } from '../types';
+import { formatDate } from './date-utils';
 
 interface WorkoutBrowserTabProps {
   data: DashboardData;
@@ -273,7 +274,3 @@ function WorkoutCard({
   );
 }
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
-}

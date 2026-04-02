@@ -3,6 +3,7 @@
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
+import { formatShortDate as formatDate } from './date-utils';
 import type { DashboardData, StrengthPR } from '../types';
 
 interface StrengthTabProps {
@@ -148,7 +149,3 @@ function StrengthCard({ name, pr }: { name: string; pr: StrengthPR }) {
   );
 }
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-}

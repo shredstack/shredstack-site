@@ -30,6 +30,26 @@ export default function Dashboard({ onUploadMore, onReanalyze, onSignOut, email,
   const [shareStatus, setShareStatus] = useState<{ isPublic: boolean; publicSlug: string | null } | null>(null);
   const [shareLoading, setShareLoading] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const [gender, setGender] = useState<string | null>(null);
+
+  // Sync gender from data once loaded
+  useEffect(() => {
+    if (data?.user?.gender) setGender(data.user.gender);
+  }, [data]);
+
+  const handleGenderChange = async (newGender: string) => {
+    setGender(newGender);
+    try {
+      await fetch('/api/smart-cfd/gender', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gender: newGender }),
+      });
+    } catch {
+      // Revert on error
+      setGender(data?.user?.gender ?? null);
+    }
+  };
 
   useEffect(() => {
     fetch(dataUrl || '/api/smart-cfd/data')
@@ -127,7 +147,19 @@ export default function Dashboard({ onUploadMore, onReanalyze, onSignOut, email,
               {data.user.displayName || email}&apos;s training dashboard
             </p>
           ) : (
-            <p className="text-surface-400 text-sm">{email}</p>
+            <div className="flex items-center gap-3">
+              <p className="text-surface-400 text-sm">{email}</p>
+              <select
+                value={gender || ''}
+                onChange={(e) => handleGenderChange(e.target.value)}
+                className="text-xs bg-surface-800 border border-surface-600 text-surface-300 rounded px-2 py-1"
+              >
+                <option value="">Set gender</option>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
+              </select>
+              {!gender && <span className="text-yellow-500 text-xs">Required for accurate weight data</span>}
+            </div>
           )}
         </div>
         {!readOnly && (

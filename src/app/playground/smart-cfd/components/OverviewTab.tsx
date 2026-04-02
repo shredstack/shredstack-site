@@ -4,6 +4,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
+import { formatShortDate } from './date-utils';
 import type { DashboardData } from '../types';
 
 const COLORS = [
@@ -175,10 +176,6 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
   );
 }
 
-function formatShortDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-}
 
 function getMonthlyFrequency(workouts: DashboardData['workouts']) {
   const months: Record<string, number> = {};

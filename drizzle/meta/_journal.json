@@ -57,6 +57,13 @@
       "when": 1775084320467,
       "tag": "0007_add-1rm-applicable-column",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1775156927323,
+      "tag": "0008_add-gender-to-crossfit-users",
+      "breakpoints": true
     }
   ]
 }
