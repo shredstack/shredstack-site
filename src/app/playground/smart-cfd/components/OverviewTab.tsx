@@ -6,6 +6,7 @@ import {
 } from 'recharts';
 import { formatShortDate } from './date-utils';
 import type { DashboardData } from '../types';
+import { ProgressionHighlightCard } from './ProgressionsTab';
 
 const COLORS = [
   '#6366f1', '#22d68a', '#f97316', '#eab308', '#ec4899',
@@ -14,9 +15,10 @@ const COLORS = [
 
 interface OverviewTabProps {
   data: DashboardData;
+  onViewProgressions?: () => void;
 }
 
-export default function OverviewTab({ data }: OverviewTabProps) {
+export default function OverviewTab({ data, onViewProgressions }: OverviewTabProps) {
   const { summary, workouts } = data;
 
   // Category donut data
@@ -54,6 +56,31 @@ export default function OverviewTab({ data }: OverviewTabProps) {
           sub="done more than once"
         />
       </div>
+
+      {/* Progression Highlights */}
+      {data.repeatWorkoutProgressions.filter((p) => p.improvement).length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-surface-400">Repeat Workout Progressions</h3>
+            {onViewProgressions && (
+              <button
+                onClick={onViewProgressions}
+                className="text-accent-400 hover:text-accent-300 text-xs transition-colors"
+              >
+                View all repeat workouts →
+              </button>
+            )}
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {data.repeatWorkoutProgressions
+              .filter((p) => p.improvement)
+              .slice(0, 3)
+              .map((prog) => (
+                <ProgressionHighlightCard key={prog.workoutId} progression={prog} />
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* Charts Row */}
       <div className="grid md:grid-cols-2 gap-6">

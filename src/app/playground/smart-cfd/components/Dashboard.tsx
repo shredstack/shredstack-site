@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { DashboardData } from '../types';
 import OverviewTab from './OverviewTab';
 import StrengthTab from './StrengthTab';
 import MovementsTab from './MovementsTab';
 import WorkoutBrowserTab from './WorkoutBrowserTab';
+import ProgressionsTab from './ProgressionsTab';
 import InsightsTab from './InsightsTab';
 
-const TABS = ['Overview', 'Strength', 'Movements', 'Workouts', 'Insights'] as const;
+const TABS = ['Overview', 'Strength', 'Movements', 'Workouts', 'Progressions', 'Insights'] as const;
 type TabName = typeof TABS[number];
 
 interface DashboardProps {
@@ -111,6 +112,83 @@ export default function Dashboard({ onUploadMore, onReanalyze, onSignOut, email,
     }
   };
 
+  const [showSampleModal, setShowSampleModal] = useState(false);
+  const [sampleSize, setSampleSize] = useState(100);
+
+  const handleSampleReanalyze = async () => {
+    setShowSampleModal(false);
+    setResetting(true);
+    try {
+      const res = await fetch('/api/smart-cfd/reset-sample', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sampleSize }),
+      });
+      if (!res.ok) throw new Error('Sample reset failed');
+      const result = await res.json();
+      alert(`Sampling complete: ${result.sampleSize} scores to analyze, ${result.skipped} skipped.`);
+      onReanalyze?.();
+    } catch {
+      setResetting(false);
+      alert('Failed to reset with sample. Please try again.');
+    }
+  };
+
+  // Category editing handlers
+  const handleWorkoutCategoryChange = useCallback(async (workoutId: number, categoryId: number | null, isMonthlyChallenge?: boolean) => {
+    try {
+      const body: Record<string, unknown> = {};
+      if (categoryId !== undefined) body.categoryId = categoryId;
+      if (isMonthlyChallenge !== undefined) body.isMonthlyChallenge = isMonthlyChallenge;
+
+      const res = await fetch(`/api/smart-cfd/workouts/${workoutId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed to update workout');
+      const updated = await res.json();
+
+      // Update local state
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          workouts: prev.workouts.map((w) =>
+            w.workoutId === workoutId
+              ? { ...w, category: updated.category ?? w.category, categoryId: updated.categoryId ?? w.categoryId, isMonthlyChallenge: updated.isMonthlyChallenge ?? w.isMonthlyChallenge }
+              : w
+          ),
+        };
+      });
+    } catch {
+      alert('Failed to update workout category.');
+    }
+  }, []);
+
+  const handleMovementCategoryChange = useCallback(async (movementId: number, category: string) => {
+    try {
+      const res = await fetch(`/api/smart-cfd/movements/${movementId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category }),
+      });
+      if (!res.ok) throw new Error('Failed to update movement');
+
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          movements: prev.movements.map((m) =>
+            m.movementId === movementId ? { ...m, movementCategory: category } : m
+          ),
+        };
+      });
+    } catch {
+      alert('Failed to update movement category.');
+    }
+  }, []);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -194,6 +272,13 @@ export default function Dashboard({ onUploadMore, onReanalyze, onSignOut, email,
               Upload data
             </button>
             <button
+              onClick={() => setShowSampleModal(true)}
+              disabled={resetting}
+              className="text-yellow-400 hover:text-yellow-300 text-sm transition-colors disabled:opacity-50"
+            >
+              Re-analyze sample
+            </button>
+            <button
               onClick={handleReanalyze}
               disabled={resetting}
               className="text-surface-400 hover:text-white text-sm transition-colors disabled:opacity-50"
@@ -239,11 +324,65 @@ export default function Dashboard({ onUploadMore, onReanalyze, onSignOut, email,
       </div>
 
       {/* Tab Content */}
-      {activeTab === 'Overview' && <OverviewTab data={data} />}
+      {activeTab === 'Overview' && (
+        <OverviewTab data={data} onViewProgressions={() => setActiveTab('Progressions')} />
+      )}
       {activeTab === 'Strength' && <StrengthTab data={data} />}
-      {activeTab === 'Movements' && <MovementsTab data={data} />}
-      {activeTab === 'Workouts' && <WorkoutBrowserTab data={data} />}
+      {activeTab === 'Movements' && (
+        <MovementsTab
+          data={data}
+          onMovementCategoryChange={readOnly ? undefined : handleMovementCategoryChange}
+        />
+      )}
+      {activeTab === 'Workouts' && (
+        <WorkoutBrowserTab
+          data={data}
+          onWorkoutCategoryChange={readOnly ? undefined : handleWorkoutCategoryChange}
+        />
+      )}
+      {activeTab === 'Progressions' && <ProgressionsTab data={data} />}
       {activeTab === 'Insights' && <InsightsTab insightsUrl={insightsUrl} readOnly={readOnly} />}
+
+      {/* Sample Re-analyze Modal */}
+      {showSampleModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowSampleModal(false)}>
+          <div className="card p-6 max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-white font-semibold mb-3">Re-analyze Sample</h3>
+            <p className="text-surface-400 text-sm mb-4">
+              Analyze a random subset of your workouts to test changes without processing the full dataset.
+              Maintains workout type and Rx/Scaled distribution. Monthly challenges capped at &lt;1%.
+            </p>
+            <div className="mb-4">
+              <label className="text-surface-400 text-xs block mb-1">Sample size</label>
+              <input
+                type="number"
+                value={sampleSize}
+                onChange={(e) => setSampleSize(Math.max(10, Math.min(500, parseInt(e.target.value) || 100)))}
+                min={10}
+                max={500}
+                className="w-full px-3 py-2 bg-surface-800 border border-surface-600 rounded-lg text-white text-sm focus:outline-none focus:border-accent-500"
+              />
+              <p className="text-surface-500 text-xs mt-1">
+                {data.summary.totalScores} total scores available
+              </p>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowSampleModal(false)}
+                className="px-4 py-2 text-surface-400 hover:text-white text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSampleReanalyze}
+                className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Reset &amp; analyze {sampleSize}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

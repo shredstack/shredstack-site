@@ -1,0 +1,2 @@
+ALTER TABLE "crossfit_user_movement_performance" ADD COLUMN "limiting_factor_score" double precision;--> statement-breakpoint
+ALTER TABLE "crossfit_user_movement_performance" ADD COLUMN "extraction_method" varchar(20);

@@ -49,6 +49,11 @@ function StrengthCard({ name, pr }: { name: string; pr: StrengthPR }) {
     pr.confidence === 'medium' ? 'text-yellow-400' :
     'text-red-400';
 
+  // Determine verification label based on extraction method and e1RM source
+  const isTested = pr.e1rmSource === 'tested' || pr.extractionMethod === 'deterministic' || pr.extractionMethod === 'audit_corrected';
+  const verificationLabel = isTested ? 'Tested 1RM' : 'Estimated 1RM';
+  const verificationColor = isTested ? 'text-green-400' : 'text-yellow-400';
+
   const chartData = pr.history.map((h) => ({
     date: formatDate(h.date),
     weight: h.weight,
@@ -63,9 +68,9 @@ function StrengthCard({ name, pr }: { name: string; pr: StrengthPR }) {
         <div>
           <h3 className="text-sm font-medium text-surface-400 uppercase tracking-wider">{name}</h3>
           <div className="text-3xl font-bold text-white mt-1">~{Math.round(pr.estimatedMax)} lbs</div>
-          <div className="text-surface-400 text-xs mt-1">
-            Tested 1RM
-            <span className={`ml-2 ${confidenceColor}`}>
+          <div className="text-surface-400 text-xs mt-1 flex items-center gap-2">
+            <span className={verificationColor}>{verificationLabel}</span>
+            <span className={confidenceColor}>
               ({pr.confidence} confidence)
             </span>
           </div>
@@ -85,10 +90,13 @@ function StrengthCard({ name, pr }: { name: string; pr: StrengthPR }) {
         </div>
       )}
 
-      {/* Best logged */}
+      {/* Best logged + e1RM source */}
       {pr.bestWeight && (
         <div className="text-surface-300 text-sm mb-3">
-          Best logged: {pr.bestReps ? `${pr.bestReps} @ ` : ''}~{Math.round(pr.bestWeight)} lbs
+          <span>Best logged: {pr.bestReps ? `${pr.bestReps} @ ` : ''}~{Math.round(pr.bestWeight)} lbs</span>
+          {pr.e1rmSource && pr.e1rmSource !== 'tested' && (
+            <span className="text-surface-500 text-xs ml-2">({pr.e1rmSource})</span>
+          )}
         </div>
       )}
 
@@ -148,4 +156,3 @@ function StrengthCard({ name, pr }: { name: string; pr: StrengthPR }) {
     </div>
   );
 }
-

@@ -5,30 +5,37 @@ import type { DashboardData, DashboardMovement, DashboardWorkout } from '../type
 
 interface MovementsTabProps {
   data: DashboardData;
+  onMovementCategoryChange?: (movementId: number, category: string) => void;
 }
 
 interface MovementStats {
   name: string;
+  movementId: number;
+  movementCategory: string | null;
   totalAppearances: number;
   rxCount: number;
   scaledCount: number;
   scaledRate: number;
   limitingFactorCount: number;
+  limitingFactorScore: number;
   estimatedMaxWeight: number | null;
   avgWeight: number | null;
 }
 
-export default function MovementsTab({ data }: MovementsTabProps) {
+const MOVEMENT_CATEGORIES = [
+  'barbell', 'dumbbell', 'kettlebell', 'gymnastics',
+  'bodyweight', 'monostructural', 'accessory', 'other',
+];
+
+export default function MovementsTab({ data, onMovementCategoryChange }: MovementsTabProps) {
   const [sortBy, setSortBy] = useState<'appearances' | 'scaledRate' | 'limitingFactor'>('appearances');
 
   const { movementStats, limitingFactors, rxRate } = useMemo(() => {
-    // Map scoreId → workout for division lookup
     const scoreMap = new Map<number, DashboardWorkout>();
     for (const w of data.workouts) {
       scoreMap.set(w.scoreId, w);
     }
 
-    // Group movements by name
     const byName = new Map<string, DashboardMovement[]>();
     for (const m of data.movements) {
       const key = m.movementName;
@@ -47,6 +54,7 @@ export default function MovementsTab({ data }: MovementsTabProps) {
       let rxCount = 0;
       let scaledCount = 0;
       let limitingFactorCount = 0;
+      let totalLimitingScore = 0;
       const weights: number[] = [];
       let maxWeight: number | null = null;
 
@@ -59,6 +67,7 @@ export default function MovementsTab({ data }: MovementsTabProps) {
         else if (div === 'scaled') scaledCount++;
 
         if (m.isLimitingFactor) limitingFactorCount++;
+        if (m.limitingFactorScore) totalLimitingScore += m.limitingFactorScore;
         if (m.estimatedMaxWeight) {
           weights.push(m.estimatedMaxWeight);
           if (maxWeight === null || m.estimatedMaxWeight > maxWeight) {
@@ -72,11 +81,14 @@ export default function MovementsTab({ data }: MovementsTabProps) {
       const total = rxCount + scaledCount;
       stats.push({
         name,
+        movementId: movements[0].movementId,
+        movementCategory: movements[0].movementCategory,
         totalAppearances: movements.length,
         rxCount,
         scaledCount,
         scaledRate: total > 0 ? (scaledCount / total) * 100 : 0,
         limitingFactorCount,
+        limitingFactorScore: totalLimitingScore,
         estimatedMaxWeight: maxWeight,
         avgWeight: weights.length > 0 ? weights.reduce((a, b) => a + b, 0) / weights.length : null,
       });
@@ -85,18 +97,24 @@ export default function MovementsTab({ data }: MovementsTabProps) {
     // Sort
     stats.sort((a, b) => {
       if (sortBy === 'scaledRate') return b.scaledRate - a.scaledRate;
-      if (sortBy === 'limitingFactor') return b.limitingFactorCount - a.limitingFactorCount;
+      if (sortBy === 'limitingFactor') return b.limitingFactorScore - a.limitingFactorScore;
       return b.totalAppearances - a.totalAppearances;
     });
 
-    // Top limiting factors (movements with highest limiting factor count and scaled rate)
+    // Top limiting factors by score (not raw count)
     const limiting = stats
-      .filter((s) => s.limitingFactorCount > 0)
-      .sort((a, b) => b.limitingFactorCount - a.limitingFactorCount)
+      .filter((s) => s.limitingFactorScore > 0)
+      .sort((a, b) => b.limitingFactorScore - a.limitingFactorScore)
       .slice(0, 5);
 
     return { movementStats: stats, limitingFactors: limiting, rxRate: currentRxRate };
   }, [data, sortBy]);
+
+  // Find the max limiting factor score for relative bar display
+  const maxLimitingScore = useMemo(
+    () => Math.max(...movementStats.map((s) => s.limitingFactorScore), 1),
+    [movementStats]
+  );
 
   if (movementStats.length === 0) {
     return (
@@ -111,16 +129,25 @@ export default function MovementsTab({ data }: MovementsTabProps) {
   return (
     <div className="space-y-8">
       {/* Limiting Factor Analysis */}
-      {limitingFactors.length > 0 && (
-        <div>
-          <h3 className="text-sm font-medium text-surface-400 mb-4">Biggest Limiting Factors</h3>
+      <div>
+        <h3 className="text-sm font-medium text-surface-400 mb-4">Biggest Limiting Factors</h3>
+        {limitingFactors.length > 0 ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {limitingFactors.map((lf) => (
-              <LimitingFactorCard key={lf.name} stat={lf} rxRate={rxRate} totalScaled={data.summary.scaledCount} />
+              <LimitingFactorCard
+                key={lf.name}
+                stat={lf}
+                maxScore={maxLimitingScore}
+                totalScaled={data.summary.scaledCount}
+              />
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-surface-400 text-sm">
+            No clear limiting factors detected — you may be Rx&apos;ing most movements consistently.
+          </p>
+        )}
+      </div>
 
       {/* All Movements Table */}
       <div>
@@ -153,11 +180,12 @@ export default function MovementsTab({ data }: MovementsTabProps) {
               <thead>
                 <tr className="border-b border-surface-700">
                   <th className="text-left text-xs text-surface-400 font-medium p-3">Movement</th>
+                  <th className="text-center text-xs text-surface-400 font-medium p-3">Category</th>
                   <th className="text-center text-xs text-surface-400 font-medium p-3">Count</th>
                   <th className="text-center text-xs text-surface-400 font-medium p-3">Rx</th>
                   <th className="text-center text-xs text-surface-400 font-medium p-3">Scaled</th>
                   <th className="text-center text-xs text-surface-400 font-medium p-3">Scaled %</th>
-                  <th className="text-center text-xs text-surface-400 font-medium p-3">Limiting</th>
+                  <th className="text-center text-xs text-surface-400 font-medium p-3">Limiting Score</th>
                   <th className="text-right text-xs text-surface-400 font-medium p-3">Est. Max</th>
                 </tr>
               </thead>
@@ -165,6 +193,21 @@ export default function MovementsTab({ data }: MovementsTabProps) {
                 {movementStats.map((stat) => (
                   <tr key={stat.name} className="border-b border-surface-800 hover:bg-surface-800/50">
                     <td className="p-3 text-sm text-white font-medium">{stat.name}</td>
+                    <td className="p-3 text-center">
+                      {onMovementCategoryChange ? (
+                        <select
+                          value={stat.movementCategory || 'other'}
+                          onChange={(e) => onMovementCategoryChange(stat.movementId, e.target.value)}
+                          className="text-xs bg-surface-800 border border-surface-600 text-surface-300 rounded px-1.5 py-0.5"
+                        >
+                          {MOVEMENT_CATEGORIES.map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-surface-400 text-xs">{stat.movementCategory || '-'}</span>
+                      )}
+                    </td>
                     <td className="p-3 text-sm text-surface-300 text-center">{stat.totalAppearances}</td>
                     <td className="p-3 text-sm text-green-400 text-center">{stat.rxCount || '-'}</td>
                     <td className="p-3 text-sm text-orange-400 text-center">{stat.scaledCount || '-'}</td>
@@ -175,9 +218,9 @@ export default function MovementsTab({ data }: MovementsTabProps) {
                         <span className="text-surface-500 text-sm">-</span>
                       )}
                     </td>
-                    <td className="p-3 text-sm text-center">
-                      {stat.limitingFactorCount > 0 ? (
-                        <span className="text-red-400">{stat.limitingFactorCount}</span>
+                    <td className="p-3 text-center">
+                      {stat.limitingFactorScore > 0 ? (
+                        <LimitingBar score={stat.limitingFactorScore} maxScore={maxLimitingScore} />
                       ) : (
                         <span className="text-surface-600">-</span>
                       )}
@@ -196,12 +239,8 @@ export default function MovementsTab({ data }: MovementsTabProps) {
   );
 }
 
-function LimitingFactorCard({ stat, rxRate, totalScaled }: { stat: MovementStats; rxRate: number; totalScaled: number }) {
-  const potentialRxGain = stat.limitingFactorCount;
-  const newRxRate = totalScaled > 0
-    ? ((rxRate / 100 * (totalScaled + (rxRate / 100) * totalScaled / (1 - rxRate / 100)) + potentialRxGain) /
-       (totalScaled + (rxRate / 100) * totalScaled / (1 - rxRate / 100) + potentialRxGain)) * 100
-    : rxRate;
+function LimitingFactorCard({ stat, maxScore, totalScaled }: { stat: MovementStats; maxScore: number; totalScaled: number }) {
+  const relativeScore = maxScore > 0 ? Math.round((stat.limitingFactorScore / maxScore) * 100) : 0;
 
   return (
     <div className="card p-5 relative overflow-hidden">
@@ -214,17 +253,38 @@ function LimitingFactorCard({ stat, rxRate, totalScaled }: { stat: MovementStats
             <> &middot; Scaled in <span className="text-orange-400">{stat.scaledCount}</span> ({Math.round(stat.scaledRate)}%)</>
           )}
         </p>
+        {/* Limiting factor score bar */}
+        <div className="mt-2">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-2 bg-surface-700 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-red-500 to-orange-500"
+                style={{ width: `${relativeScore}%` }}
+              />
+            </div>
+            <span className="text-red-400 text-xs font-medium w-8 text-right">{relativeScore}%</span>
+          </div>
+          <p className="text-surface-500 text-xs mt-1">Limiting factor score (relative)</p>
+        </div>
         {stat.limitingFactorCount > 0 && (
-          <p className="text-surface-300">
-            Identified as limiting factor in <span className="text-red-400">{stat.limitingFactorCount}</span> workouts
-          </p>
-        )}
-        {potentialRxGain > 0 && (
           <p className="text-surface-400 text-xs mt-2">
-            Mastering this could move ~{potentialRxGain} workout{potentialRxGain !== 1 ? 's' : ''} from Scaled to Rx
+            Mastering this could move ~{stat.limitingFactorCount} workout{stat.limitingFactorCount !== 1 ? 's' : ''} from Scaled to Rx
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+function LimitingBar({ score, maxScore }: { score: number; maxScore: number }) {
+  const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+  const color = pct > 70 ? 'bg-red-500' : pct > 40 ? 'bg-orange-500' : 'bg-yellow-500';
+  return (
+    <div className="flex items-center gap-2 justify-center">
+      <div className="w-16 h-1.5 bg-surface-700 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-surface-400 text-xs w-8">{pct}%</span>
     </div>
   );
 }
