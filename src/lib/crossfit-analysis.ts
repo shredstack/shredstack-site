@@ -9,7 +9,8 @@ import {
   crossfitWorkoutCategories,
   crossfitUsers,
 } from '@/db/schema';
-import { eq, and, isNull, inArray } from 'drizzle-orm';
+import { eq, and, isNull, inArray, desc } from 'drizzle-orm';
+import { parseScore, type ParsedScore } from './crossfit-score-parser';
 
 // ============================================================
 // TYPES
@@ -971,7 +972,9 @@ async function storeScoreResult(
   scoreId: number,
   result: ScoreLLMResult,
   rawScore?: string,
-  rawDescription?: string
+  rawDescription?: string,
+  parsedScoreOverride?: ParsedScore | null,
+  processingTier?: string
 ): Promise<void> {
   // Apply deterministic score extraction override if possible
   let scoreType = result.score_interpretation?.score_type || 'unknown';
@@ -997,6 +1000,23 @@ async function storeScoreResult(
         } : {}),
       }),
       aiAnalysis: JSON.stringify(result),
+      ...(parsedScoreOverride ? {
+        parsedScoreFormat: parsedScoreOverride.scoreFormat,
+        parsedScoreData: {
+          timeSeconds: parsedScoreOverride.timeSeconds,
+          rounds: parsedScoreOverride.rounds,
+          remainderReps: parsedScoreOverride.remainderReps,
+          reps: parsedScoreOverride.reps,
+          weight: parsedScoreOverride.weight,
+          plainNumber: parsedScoreOverride.plainNumber,
+          workoutType: parsedScoreOverride.workoutType,
+          repScheme: parsedScoreOverride.repScheme,
+          repSchemeType: parsedScoreOverride.repSchemeType,
+          interpretation: parsedScoreOverride.interpretation,
+          confidence: parsedScoreOverride.confidence,
+        },
+        scoreProcessingTier: processingTier || (parsedScoreOverride.needsAI ? parsedScoreOverride.aiTier : 'deterministic'),
+      } : {}),
     })
     .where(eq(crossfitUserScores.id, scoreId));
 
@@ -1038,6 +1058,7 @@ async function storeScoreResult(
       estimatedRepsCompleted: parseInteger(perf.estimated_reps_completed),
       isLimitingFactor: perf.is_limiting_factor ?? false,
       confidence: deterministicMax !== null ? 'high' : 'medium',
+      extractionMethod: deterministicMax !== null ? 'deterministic' : 'llm',
     });
   }
 }
@@ -1215,67 +1236,90 @@ async function runScoreValidation(
  * Deterministic scaling inference — replaces the LLM-based Stage 5.
  * Uses Rx history per movement to determine which movements were likely scaled.
  */
+/**
+ * Compute a recency-weighted Rx rate using exponential decay based on workout count.
+ * halfLife = 120 workouts means a workout 120 workouts ago has weight ~0.5.
+ */
+function computeWeightedRxRate(
+  appearances: { workoutIndex: number; wasRx: boolean }[],
+  halfLife: number = 120
+): number {
+  const lambda = Math.LN2 / halfLife;
+  let weightedRx = 0;
+  let weightedTotal = 0;
+  for (const a of appearances) {
+    const weight = Math.exp(-lambda * a.workoutIndex);
+    weightedTotal += weight;
+    if (a.wasRx) weightedRx += weight;
+  }
+  return weightedTotal > 0 ? weightedRx / weightedTotal : 0;
+}
+
 async function runScalingInference(
   _client: Anthropic,
   userId: number
 ): Promise<void> {
-  // Get scaled scores
-  const scaledScores = await db
+  // Get ALL user scores ordered by date descending (most recent first)
+  const allScores = await db
     .select({
       id: crossfitUserScores.id,
       workoutId: crossfitUserScores.workoutId,
+      rawDivision: crossfitUserScores.rawDivision,
+      workoutDate: crossfitUserScores.workoutDate,
     })
     .from(crossfitUserScores)
-    .where(
-      and(
-        eq(crossfitUserScores.userId, userId),
-        eq(crossfitUserScores.rawDivision, 'Scaled')
-      )
-    );
+    .where(eq(crossfitUserScores.userId, userId))
+    .orderBy(desc(crossfitUserScores.workoutDate));
+
+  if (allScores.length === 0) return;
+
+  // Assign workout indices (0 = most recent)
+  const scoreIndexMap = new Map<number, number>();
+  allScores.forEach((s, idx) => scoreIndexMap.set(s.id, idx));
+
+  const scaledScores = allScores.filter((s) => s.rawDivision?.toLowerCase() === 'scaled');
+  const rxScoreIdSet = new Set(
+    allScores.filter((s) => s.rawDivision?.toLowerCase() === 'rx').map((s) => s.id)
+  );
 
   if (scaledScores.length === 0) return;
 
-  // Get user's Rx history for movements
-  const rxScores = await db
-    .select({ id: crossfitUserScores.id })
-    .from(crossfitUserScores)
-    .where(
-      and(
-        eq(crossfitUserScores.userId, userId),
-        eq(crossfitUserScores.rawDivision, 'Rx')
-      )
-    );
-
-  const rxScoreIds = rxScores.map((s) => s.id);
-  const rxMovementIds = new Set<number>();
-
-  if (rxScoreIds.length > 0) {
-    const rxPerf = await db
-      .select({ movementId: crossfitUserMovementPerformance.movementId })
-      .from(crossfitUserMovementPerformance)
-      .where(inArray(crossfitUserMovementPerformance.userScoreId, rxScoreIds));
-
-    for (const p of rxPerf) rxMovementIds.add(p.movementId);
-  }
-
-  // Build per-movement Rx rate
-  const allUserScoreIds = [...rxScoreIds, ...scaledScores.map((s) => s.id)];
-  const allPerf = allUserScoreIds.length > 0 ? await db
+  // Get all movement performances for this user's scores
+  const allScoreIds = allScores.map((s) => s.id);
+  const allPerf = allScoreIds.length > 0 ? await db
     .select({
       userScoreId: crossfitUserMovementPerformance.userScoreId,
       movementId: crossfitUserMovementPerformance.movementId,
     })
     .from(crossfitUserMovementPerformance)
-    .where(inArray(crossfitUserMovementPerformance.userScoreId, allUserScoreIds)) : [];
+    .where(inArray(crossfitUserMovementPerformance.userScoreId, allScoreIds)) : [];
 
-  const rxScoreIdSet = new Set(rxScoreIds);
-  const movementRxCounts = new Map<number, { rx: number; total: number }>();
+  // Build per-movement appearance history with recency indices
+  const movementAppearances = new Map<number, { workoutIndex: number; wasRx: boolean }[]>();
   for (const p of allPerf) {
-    const counts = movementRxCounts.get(p.movementId) || { rx: 0, total: 0 };
-    counts.total++;
-    if (rxScoreIdSet.has(p.userScoreId)) counts.rx++;
-    movementRxCounts.set(p.movementId, counts);
+    const idx = scoreIndexMap.get(p.userScoreId);
+    if (idx === undefined) continue;
+    if (!movementAppearances.has(p.movementId)) movementAppearances.set(p.movementId, []);
+    movementAppearances.get(p.movementId)!.push({
+      workoutIndex: idx,
+      wasRx: rxScoreIdSet.has(p.userScoreId),
+    });
   }
+
+  // Precompute weighted Rx rates per movement
+  const movementWeightedRxRates = new Map<number, number>();
+  for (const [movementId, appearances] of movementAppearances) {
+    movementWeightedRxRates.set(movementId, computeWeightedRxRate(appearances));
+  }
+
+  // Count movements per score (for co-occurrence discount)
+  const movementsPerScore = new Map<number, number>();
+  for (const p of allPerf) {
+    movementsPerScore.set(p.userScoreId, (movementsPerScore.get(p.userScoreId) || 0) + 1);
+  }
+
+  // Movement name cache
+  const movementNameCache = new Map<number, string>();
 
   // Process each scaled score
   for (const score of scaledScores) {
@@ -1284,26 +1328,58 @@ async function runScalingInference(
         id: crossfitUserMovementPerformance.id,
         movementId: crossfitUserMovementPerformance.movementId,
         inferredScalingDetail: crossfitUserMovementPerformance.inferredScalingDetail,
+        limitingFactorScore: crossfitUserMovementPerformance.limitingFactorScore,
       })
       .from(crossfitUserMovementPerformance)
       .where(eq(crossfitUserMovementPerformance.userScoreId, score.id));
 
-    // Skip if already has scaling detail
-    if (perfRecords.length > 0 && perfRecords.every((p) => p.inferredScalingDetail)) continue;
+    // Skip if already fully processed (has both scaling detail and numeric score)
+    if (perfRecords.length > 0 && perfRecords.every((p) => p.inferredScalingDetail && p.limitingFactorScore !== null)) continue;
+
+    const numMovementsInWorkout = perfRecords.length;
 
     for (const perf of perfRecords) {
-      if (perf.inferredScalingDetail) continue;
+      if (perf.inferredScalingDetail && perf.limitingFactorScore !== null) continue;
 
-      const hasEverRxd = rxMovementIds.has(perf.movementId);
-      const counts = movementRxCounts.get(perf.movementId);
-      const rxRate = counts && counts.total > 0 ? counts.rx / counts.total : 0;
+      const weightedRxRate = movementWeightedRxRates.get(perf.movementId) ?? 0;
+      const appearances = movementAppearances.get(perf.movementId) || [];
+      const hasEverRxd = appearances.some((a) => a.wasRx);
 
-      const movementRow = await db
-        .select({ canonicalName: crossfitMovements.canonicalName })
-        .from(crossfitMovements)
-        .where(eq(crossfitMovements.id, perf.movementId))
-        .limit(1);
-      const movementName = movementRow[0]?.canonicalName || 'this movement';
+      // Co-occurrence discount: confidence multiplier based on how likely this movement caused scaling
+      let confidenceMultiplier: number;
+      if (!hasEverRxd) {
+        confidenceMultiplier = 1.0; // high confidence it caused scaling
+      } else if (weightedRxRate < 0.5) {
+        confidenceMultiplier = 0.7; // medium confidence
+      } else {
+        confidenceMultiplier = 0.2; // low confidence — probably wasn't the reason
+      }
+
+      // Co-occurrence score: distribute blame across movements in the workout
+      const cooccurrenceScore = numMovementsInWorkout > 0
+        ? (1 / numMovementsInWorkout) * confidenceMultiplier
+        : confidenceMultiplier;
+
+      // Compute total weighted appearances (recency-weighted sum)
+      const lambda = Math.LN2 / 120;
+      let totalWeightedAppearances = 0;
+      for (const a of appearances) {
+        totalWeightedAppearances += Math.exp(-lambda * a.workoutIndex);
+      }
+
+      // Final limiting factor score
+      const limitingFactorScore = (1 - weightedRxRate) * totalWeightedAppearances * cooccurrenceScore;
+
+      // Get movement name
+      if (!movementNameCache.has(perf.movementId)) {
+        const movementRow = await db
+          .select({ canonicalName: crossfitMovements.canonicalName })
+          .from(crossfitMovements)
+          .where(eq(crossfitMovements.id, perf.movementId))
+          .limit(1);
+        movementNameCache.set(perf.movementId, movementRow[0]?.canonicalName || 'this movement');
+      }
+      const movementName = movementNameCache.get(perf.movementId)!;
 
       let confidence: string;
       let isLimitingFactor: boolean;
@@ -1313,22 +1389,178 @@ async function runScalingInference(
         confidence = 'high';
         isLimitingFactor = true;
         inferredScalingDetail = `Never performed ${movementName} Rx — likely substituted or modified`;
-      } else if (rxRate < 0.5) {
+      } else if (weightedRxRate < 0.5) {
         confidence = 'medium';
         isLimitingFactor = true;
-        inferredScalingDetail = `Scales ${movementName} more often than not — likely a limiting factor`;
+        inferredScalingDetail = `Scales ${movementName} more often than not (recent Rx rate: ${Math.round(weightedRxRate * 100)}%) — likely a limiting factor`;
       } else {
         confidence = 'low';
         isLimitingFactor = false;
-        inferredScalingDetail = `Usually performs ${movementName} Rx — likely scaled weight only`;
+        inferredScalingDetail = `Usually performs ${movementName} Rx (recent Rx rate: ${Math.round(weightedRxRate * 100)}%) — likely scaled weight only`;
       }
 
       await db
         .update(crossfitUserMovementPerformance)
-        .set({ inferredScalingDetail, isLimitingFactor, confidence })
+        .set({ inferredScalingDetail, isLimitingFactor, confidence, limitingFactorScore })
         .where(eq(crossfitUserMovementPerformance.id, perf.id));
     }
   }
+}
+
+// ============================================================
+// STAGE 5b: POST-PROCESSING 1RM AUDIT
+// ============================================================
+
+/**
+ * After all scores are analyzed, audit "for_load" workouts where the raw score
+ * clearly says "1 @ W" but the movement performance has a different weight.
+ * This catches cases where the LLM missed an obvious 1RM.
+ */
+async function runStrength1RMAudit(userId: number): Promise<void> {
+  // Get all for_load scores for this user
+  const forLoadScores = await db
+    .select({
+      id: crossfitUserScores.id,
+      rawScore: crossfitUserScores.rawScore,
+      scoreType: crossfitUserScores.scoreType,
+      workoutType: crossfitWorkouts.workoutType,
+    })
+    .from(crossfitUserScores)
+    .innerJoin(crossfitWorkouts, eq(crossfitUserScores.workoutId, crossfitWorkouts.id))
+    .where(
+      and(
+        eq(crossfitUserScores.userId, userId),
+        eq(crossfitWorkouts.workoutType, 'for_load')
+      )
+    );
+
+  for (const score of forLoadScores) {
+    // Match "1 @ W" or "1@W" patterns
+    const rawMatch = score.rawScore.trim().match(/^1\s*@\s*([\d.]+)$/);
+    if (!rawMatch) continue;
+
+    const declaredWeight = parseFloat(rawMatch[1]);
+    if (isNaN(declaredWeight) || declaredWeight <= 0) continue;
+
+    // Get movement performances for this score
+    const perfs = await db
+      .select({
+        id: crossfitUserMovementPerformance.id,
+        estimatedMaxWeight: crossfitUserMovementPerformance.estimatedMaxWeight,
+        estimatedRepsCompleted: crossfitUserMovementPerformance.estimatedRepsCompleted,
+        extractionMethod: crossfitUserMovementPerformance.extractionMethod,
+      })
+      .from(crossfitUserMovementPerformance)
+      .where(eq(crossfitUserMovementPerformance.userScoreId, score.id));
+
+    if (perfs.length === 0) continue;
+
+    // Check if any perf already has the correct weight
+    const hasCorrectWeight = perfs.some(
+      (p) => p.estimatedMaxWeight !== null && Math.abs(p.estimatedMaxWeight - declaredWeight) < 1
+    );
+
+    if (!hasCorrectWeight) {
+      // Patch the primary movement (first one) with the correct weight
+      const primaryPerf = perfs[0];
+      await db
+        .update(crossfitUserMovementPerformance)
+        .set({
+          estimatedMaxWeight: declaredWeight,
+          estimatedActualWeight: declaredWeight,
+          estimatedRepsCompleted: 1,
+          extractionMethod: 'audit_corrected',
+          confidence: 'high',
+        })
+        .where(eq(crossfitUserMovementPerformance.id, primaryPerf.id));
+    }
+  }
+}
+
+// ============================================================
+// STAGE 5c: POST-ENRICHMENT TITLE AUDIT
+// ============================================================
+
+/**
+ * Ensure canonicalTitle is never null for any workout.
+ * For workouts where the AI enrichment left canonicalTitle null, generate
+ * a descriptive title deterministically from the workout description.
+ */
+async function runTitleAudit(): Promise<number> {
+  // Find all workouts with null canonicalTitle that have been enriched (have workoutType)
+  const untitled = await db
+    .select({
+      id: crossfitWorkouts.id,
+      rawTitle: crossfitWorkouts.rawTitle,
+      rawDescription: crossfitWorkouts.rawDescription,
+      workoutType: crossfitWorkouts.workoutType,
+    })
+    .from(crossfitWorkouts)
+    .where(
+      and(
+        isNull(crossfitWorkouts.canonicalTitle),
+        // Only audit enriched workouts (have a workoutType)
+      )
+    );
+
+  // Filter to only enriched workouts (workoutType is not null)
+  const toFix = untitled.filter(w => w.workoutType !== null);
+
+  let fixed = 0;
+
+  for (const workout of toFix) {
+    let title: string | null = null;
+    let titleSource: string = 'ai_generated';
+    const desc = workout.rawDescription || '';
+
+    // 1. If rawTitle is meaningful (not a generic label), use it
+    if (workout.rawTitle) {
+      const raw = workout.rawTitle.trim();
+      const genericLabels = /^(for time|for load|for reps|amrap|emom|tabata|pre-workout|post-workout|warm-up|cool-down|accessory)[:\s]*$/i;
+      if (!genericLabels.test(raw) && raw.length > 0) {
+        title = raw;
+        titleSource = 'raw';
+      }
+    }
+
+    // 2. Check for named benchmarks in description
+    if (!title) {
+      const benchmarks = desc.match(/\b(fran|murph|grace|diane|helen|nancy|karen|annie|jackie|elizabeth|isabel|cindy|mary|kelly|filthy fifty|amanda|linda|eva|nicole|christine|marguerita|chelsea|angie|barbara|danielle|michael|chad|josh|jt|daniel|badger|nate|randy|glen|griff|luce|wittman|loredo|holbrook)\b/i);
+      if (benchmarks) {
+        title = benchmarks[1].charAt(0).toUpperCase() + benchmarks[1].slice(1).toLowerCase();
+        titleSource = 'ai_generated';
+      }
+    }
+
+    // 3. Generate from description: "[Movement] [Rep Scheme]" or first ~60 chars
+    if (!title) {
+      // Try to build from workout type + key movements
+      const repSchemeMatch = desc.match(/\b(\d+(?:-\d+){2,})\b/);
+      const movementMatch = desc.match(/(?:back squat|front squat|deadlift|bench press|strict press|push press|clean and jerk|snatch|clean|thruster|squat clean|power clean|push jerk|split jerk)/i);
+
+      if (movementMatch && repSchemeMatch) {
+        title = `${movementMatch[0]} ${repSchemeMatch[1]}`;
+      } else if (movementMatch) {
+        const type = workout.workoutType || '';
+        title = `${movementMatch[0]}${type ? ` (${type.replace(/_/g, ' ')})` : ''}`;
+      } else {
+        // Generic fallback: first ~60 chars of description
+        title = desc.slice(0, 60).replace(/\s+/g, ' ').trim();
+        if (desc.length > 60) title += '\u2026';
+      }
+      titleSource = 'ai_generated';
+    }
+
+    if (title) {
+      await db
+        .update(crossfitWorkouts)
+        .set({ canonicalTitle: title, titleSource })
+        .where(eq(crossfitWorkouts.id, workout.id));
+      fixed++;
+    }
+  }
+
+  return fixed;
 }
 
 // ============================================================
@@ -1383,6 +1615,17 @@ export async function processAnalysisChunk(
 
   // Nothing left to enrich/analyze — run final passes and mark complete
   if (totalWork === 0) {
+    // Check if already complete — don't re-run final passes on every page load
+    const currentUser = await db
+      .select({ analysisStatus: crossfitUsers.analysisStatus })
+      .from(crossfitUsers)
+      .where(eq(crossfitUsers.id, userId))
+      .limit(1);
+
+    if (currentUser[0]?.analysisStatus === 'complete') {
+      return { processed: 0, remaining: 0, total: 0 };
+    }
+
     // Run validation & inference only once all enrichment/analysis is done
     try {
       await db
@@ -1397,11 +1640,28 @@ export async function processAnalysisChunk(
     try {
       await db
         .update(crossfitUsers)
+        .set({ analysisProgress: 98 })
+        .where(eq(crossfitUsers.id, userId));
+      await runStrength1RMAudit(userId);
+    } catch (err) {
+      console.error('Strength 1RM audit stage failed:', err);
+    }
+
+    try {
+      await db
+        .update(crossfitUsers)
         .set({ analysisProgress: 99 })
         .where(eq(crossfitUsers.id, userId));
       await runScalingInference(client, userId);
     } catch (err) {
       console.error('Scaling inference stage failed:', err);
+    }
+
+    // Title audit — ensure canonicalTitle is never null
+    try {
+      await runTitleAudit();
+    } catch (err) {
+      console.error('Title audit stage failed:', err);
     }
 
     await db
@@ -1563,10 +1823,18 @@ export async function processAnalysisChunk(
         .select({
           movementId: crossfitWorkoutMovements.movementId,
           canonicalName: crossfitMovements.canonicalName,
+          prescribedReps: crossfitWorkoutMovements.prescribedReps,
         })
         .from(crossfitWorkoutMovements)
         .innerJoin(crossfitMovements, eq(crossfitWorkoutMovements.movementId, crossfitMovements.id))
         .where(eq(crossfitWorkoutMovements.workoutId, score.workoutId));
+
+      // Run Tier 1 parser for scaled scores too (captures time, rounds, etc.)
+      const movementsForParser = workoutMovements.map(m => ({
+        name: m.canonicalName,
+        prescribedReps: m.prescribedReps ?? 0,
+      }));
+      const parsed = parseScore(score.rawScore, score.rawDescription, movementsForParser);
 
       // Create movement performance records with null weights
       for (const m of workoutMovements) {
@@ -1578,10 +1846,11 @@ export async function processAnalysisChunk(
           estimatedRepsCompleted: null,
           isLimitingFactor: false,
           confidence: 'low',
+          extractionMethod: 'deterministic',
         });
       }
 
-      // Determine score type from raw score pattern
+      // Store with parsed score data
       const scoreType = inferScoreType(score.rawScore);
 
       await db
@@ -1590,14 +1859,172 @@ export async function processAnalysisChunk(
           scoreType,
           aiScoreInterpretation: JSON.stringify({ score_type: scoreType, confidence: 'medium', scaled: true }),
           aiAnalysis: JSON.stringify({ source: 'deterministic_scaled', summary: 'Scaled workout — weight data unknown' }),
+          parsedScoreFormat: parsed.scoreFormat,
+          parsedScoreData: {
+            timeSeconds: parsed.timeSeconds,
+            rounds: parsed.rounds,
+            remainderReps: parsed.remainderReps,
+            interpretation: parsed.interpretation,
+            confidence: parsed.confidence,
+          },
+          scoreProcessingTier: 'deterministic',
         })
         .where(eq(crossfitUserScores.id, score.id));
 
       processed++;
     }
 
-    // Only send Rx scores to LLM
-    const scoresToAnalyze = rxScores;
+    // THREE-TIER PROCESSING for Rx scores:
+    // Tier 1: Deterministic parser (free, ~60% of scores)
+    // Tier 2: Haiku confirmation (cheap, ~25% of scores) — currently falls through to Sonnet
+    // Tier 3: Sonnet full analysis (~15% of scores)
+
+    // Get workout movements for Tier 1 parser context
+    const allWorkoutIds = [...new Set(rxScores.map(s => s.workoutId))];
+    const allWorkoutMovements = allWorkoutIds.length > 0 ? await db
+      .select({
+        workoutId: crossfitWorkoutMovements.workoutId,
+        canonicalName: crossfitMovements.canonicalName,
+        prescribedReps: crossfitWorkoutMovements.prescribedReps,
+        orderInWorkout: crossfitWorkoutMovements.orderInWorkout,
+      })
+      .from(crossfitWorkoutMovements)
+      .innerJoin(crossfitMovements, eq(crossfitWorkoutMovements.movementId, crossfitMovements.id))
+      .where(inArray(crossfitWorkoutMovements.workoutId, allWorkoutIds)) : [];
+
+    const workoutMovementMap = new Map<number, { name: string; prescribedReps: number }[]>();
+    for (const wm of allWorkoutMovements) {
+      if (!workoutMovementMap.has(wm.workoutId)) workoutMovementMap.set(wm.workoutId, []);
+      workoutMovementMap.get(wm.workoutId)!.push({
+        name: wm.canonicalName,
+        prescribedReps: wm.prescribedReps ?? 0,
+      });
+    }
+    // Sort by orderInWorkout
+    for (const [wId] of workoutMovementMap) {
+      const wms = allWorkoutMovements.filter(w => w.workoutId === wId);
+      workoutMovementMap.set(wId, wms
+        .sort((a, b) => (a.orderInWorkout ?? 0) - (b.orderInWorkout ?? 0))
+        .map(w => ({ name: w.canonicalName, prescribedReps: w.prescribedReps ?? 0 })));
+    }
+
+    // Run Tier 1 on all Rx scores
+    const tier1Deterministic: { score: ScoreForAnalysis; parsed: ParsedScore }[] = [];
+    const tier23NeedsAI: ScoreForAnalysis[] = [];
+
+    for (const score of rxScores) {
+      const movements = workoutMovementMap.get(score.workoutId);
+      const parsed = parseScore(score.rawScore, score.rawDescription, movements);
+
+      if (!parsed.needsAI && parsed.confidence !== 'low') {
+        tier1Deterministic.push({ score, parsed });
+      } else {
+        tier23NeedsAI.push(score);
+      }
+    }
+
+    // Process Tier 1 deterministic scores (no LLM cost)
+    for (const { score, parsed } of tier1Deterministic) {
+      // Get workout movements to create performance records
+      const wMovements = await db
+        .select({
+          movementId: crossfitWorkoutMovements.movementId,
+          canonicalName: crossfitMovements.canonicalName,
+          prescribedWeight: crossfitWorkoutMovements.prescribedWeight,
+          prescribedReps: crossfitWorkoutMovements.prescribedReps,
+        })
+        .from(crossfitWorkoutMovements)
+        .innerJoin(crossfitMovements, eq(crossfitWorkoutMovements.movementId, crossfitMovements.id))
+        .where(eq(crossfitWorkoutMovements.workoutId, score.workoutId));
+
+      // Map score type from parser to schema score type
+      const scoreTypeMap: Record<string, string> = {
+        'time_score': 'time',
+        'amrap_score': 'rounds_reps',
+        'one_rm': 'max_weight',
+        'multi_rm': 'max_weight',
+        'sum_of_weights': 'sum_of_weights',
+        'time_capped_reps': 'reps',
+        'total_reps': 'reps',
+        'complete': 'complete',
+      };
+      const scoreType = scoreTypeMap[parsed.interpretation.type] || inferScoreType(score.rawScore);
+
+      // Create movement performance records
+      for (const m of wMovements) {
+        let estimatedMaxWeight: number | null = null;
+        let estimatedActualWeight: number | null = null;
+        let estimatedRepsCompleted: number | null = null;
+
+        // For strength interpretations, assign weight to the primary movement
+        if (parsed.interpretation.estimatedMaxWeight && wMovements.length === 1) {
+          estimatedMaxWeight = parsed.interpretation.estimatedMaxWeight;
+          estimatedActualWeight = parsed.interpretation.estimatedMaxWeight;
+          estimatedRepsCompleted = parsed.interpretation.estimatedReps ?? null;
+        } else if (parsed.interpretation.estimatedMaxWeight && m.prescribedWeight) {
+          // For multi-movement workouts, use prescribed weight as actual
+          estimatedActualWeight = m.prescribedWeight;
+        }
+
+        // For AMRAP decomposition, get per-movement reps
+        if (parsed.interpretation.amrapDecomposition) {
+          const decomp = parsed.interpretation.amrapDecomposition.find(
+            d => d.movementName === m.canonicalName
+          );
+          if (decomp) {
+            estimatedRepsCompleted = decomp.completedReps;
+            estimatedActualWeight = m.prescribedWeight;
+          }
+        }
+
+        await db.insert(crossfitUserMovementPerformance).values({
+          userScoreId: score.id,
+          movementId: m.movementId,
+          estimatedActualWeight,
+          estimatedMaxWeight,
+          estimatedRepsCompleted,
+          isLimitingFactor: false,
+          confidence: parsed.confidence,
+          extractionMethod: 'deterministic',
+        });
+      }
+
+      // Store score with parsed data
+      await db
+        .update(crossfitUserScores)
+        .set({
+          scoreType,
+          aiScoreInterpretation: JSON.stringify({
+            score_type: scoreType,
+            confidence: parsed.confidence,
+            deterministic: true,
+            interpretation: parsed.interpretation,
+          }),
+          aiAnalysis: JSON.stringify({ source: 'deterministic_tier1', parsed }),
+          parsedScoreFormat: parsed.scoreFormat,
+          parsedScoreData: {
+            timeSeconds: parsed.timeSeconds,
+            rounds: parsed.rounds,
+            remainderReps: parsed.remainderReps,
+            reps: parsed.reps,
+            weight: parsed.weight,
+            plainNumber: parsed.plainNumber,
+            workoutType: parsed.workoutType,
+            repScheme: parsed.repScheme,
+            repSchemeType: parsed.repSchemeType,
+            interpretation: parsed.interpretation,
+            confidence: parsed.confidence,
+          },
+          scoreProcessingTier: 'deterministic',
+        })
+        .where(eq(crossfitUserScores.id, score.id));
+
+      processed++;
+    }
+
+    // Send remaining scores (Tier 2/3) to Sonnet
+    // (Tier 2 Haiku confirmation is a future optimization — for now, route to Sonnet)
+    const scoresToAnalyze = tier23NeedsAI;
 
     const scoreBatches: ScoreForAnalysis[][] = [];
     for (let i = 0; i < scoresToAnalyze.length; i += SCORE_BATCH_SIZE) {
@@ -1616,7 +2043,10 @@ export async function processAnalysisChunk(
 
         if (result.status === 'fulfilled') {
           for (let k = 0; k < result.value.length; k++) {
-            await storeScoreResult(batch[k].id, result.value[k], batch[k].rawScore, batch[k].rawDescription);
+            // Run Tier 1 parser for context storage even for Sonnet-processed scores
+            const movements = workoutMovementMap.get(batch[k].workoutId);
+            const parsed = parseScore(batch[k].rawScore, batch[k].rawDescription, movements);
+            await storeScoreResult(batch[k].id, result.value[k], batch[k].rawScore, batch[k].rawDescription, parsed, 'sonnet');
             processed++;
           }
         } else {

@@ -64,6 +64,20 @@
       "when": 1775156927323,
       "tag": "0008_add-gender-to-crossfit-users",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1775229323993,
+      "tag": "0009_add-limiting-factor-score-and-extraction-method",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1775245957115,
+      "tag": "0010_add-parsed-score-columns",
+      "breakpoints": true
     }
   ]
 }

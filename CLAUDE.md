@@ -1,5 +1,23 @@
 # ShredStack Site
 
+## Project Directory Structure
+
+- **`src/`** — Application source code (Next.js app, components, lib, db)
+- **`scripts/`** — Utility scripts (Python, shell) committed to the repo. Put reusable data processing, migration helpers, and dev tools here.
+- **`test_data/`** — Test/sample data files (CSV exports, fixtures). **Gitignored** — never commit real user data. Full PushPress exports and sample subsets live here.
+- **`claude_instructions/`** — Spec documents, feature plans, and reference material for Claude. Not application code.
+- **`drizzle/`** — Generated SQL migration files (committed to git, but don't edit manually).
+
+### Where to put things
+
+| What | Where |
+|------|-------|
+| Spec docs, feature plans | `claude_instructions/` |
+| Python/shell utility scripts | `scripts/` |
+| CSV exports, test fixtures, sample data | `test_data/` (gitignored) |
+| Application code | `src/` |
+| SQL migrations | `drizzle/` (auto-generated) |
+
 ## Database Migrations
 
 This project uses [Drizzle ORM](https://orm.drizzle.team/) with Neon PostgreSQL for database management.

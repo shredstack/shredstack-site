@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, text, boolean, timestamp, integer, real, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, serial, varchar, text, boolean, timestamp, integer, real, uniqueIndex, doublePrecision, jsonb } from 'drizzle-orm/pg-core';
 
 export const blogPosts = pgTable('blog_posts', {
   id: serial('id').primaryKey(),
@@ -145,6 +145,17 @@ export const crossfitUserScores = pgTable('crossfit_user_scores', {
   aiAnalysis: text('ai_analysis'),
   // Full JSON blob from LLM for this specific score
 
+  // Deterministic score parser output (Tier 1)
+  parsedScoreFormat: varchar('parsed_score_format', { length: 30 }),
+  // 'time' | 'rounds_reps' | 'reps_at_weight' | 'plain_number' | 'complete' | 'empty' | 'other'
+
+  parsedScoreData: jsonb('parsed_score_data'),
+  // { timeSeconds, rounds, remainderReps, reps, weight, plainNumber,
+  //   interpretation: { type, estimatedMaxWeight, e1RM, amrapDecomposition } }
+
+  scoreProcessingTier: varchar('score_processing_tier', { length: 20 }),
+  // 'deterministic' | 'haiku' | 'sonnet'
+
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 }, (table) => [
   uniqueIndex('crossfit_user_scores_user_workout_date_idx')
@@ -161,12 +172,17 @@ export const crossfitUserMovementPerformance = pgTable('crossfit_user_movement_p
   estimatedRepsCompleted: integer('estimated_reps_completed'),
 
   isLimitingFactor: boolean('is_limiting_factor').default(false),
+  limitingFactorScore: doublePrecision('limiting_factor_score'),
+  // Numeric score combining recency-weighted Rx rate, co-occurrence discount, and frequency
 
   inferredScalingDetail: text('inferred_scaling_detail'),
   // AI inference of what the user likely did instead of Rx
 
   confidence: varchar('confidence', { length: 20 }).default('medium'),
   // 'high' | 'medium' | 'low'
+
+  extractionMethod: varchar('extraction_method', { length: 20 }),
+  // 'deterministic' | 'llm' | 'audit_corrected'
 
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });

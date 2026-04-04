@@ -6,9 +6,10 @@ import { formatDate } from './date-utils';
 
 interface WorkoutBrowserTabProps {
   data: DashboardData;
+  onWorkoutCategoryChange?: (workoutId: number, categoryId: number | null, isMonthlyChallenge?: boolean) => void;
 }
 
-export default function WorkoutBrowserTab({ data }: WorkoutBrowserTabProps) {
+export default function WorkoutBrowserTab({ data, onWorkoutCategoryChange }: WorkoutBrowserTabProps) {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [divisionFilter, setDivisionFilter] = useState<string>('all');
@@ -21,11 +22,21 @@ export default function WorkoutBrowserTab({ data }: WorkoutBrowserTabProps) {
     [data.summary.categories]
   );
 
+  // Category breakdown for bar chart
+  const categoryBreakdown = useMemo(() => {
+    const entries = Object.entries(data.summary.categories).sort((a, b) => b[1] - a[1]);
+    const total = entries.reduce((sum, [, count]) => sum + count, 0);
+    return entries.map(([name, count]) => ({
+      name,
+      count,
+      percent: total > 0 ? Math.round((count / total) * 100) : 0,
+    }));
+  }, [data.summary.categories]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return data.workouts
       .filter((w) => {
-        // Exclude monthly challenges from the browser
         if (w.isMonthlyChallenge) return false;
         if (q && !w.rawDescription.toLowerCase().includes(q) &&
             !w.aiSummary?.toLowerCase().includes(q) &&
@@ -56,6 +67,42 @@ export default function WorkoutBrowserTab({ data }: WorkoutBrowserTabProps) {
 
   return (
     <div className="space-y-4">
+      {/* Category Breakdown Bar Chart */}
+      {categoryBreakdown.length > 0 && (
+        <div className="card p-5">
+          <h3 className="text-sm font-medium text-surface-400 mb-3">Workout Categories</h3>
+          <div className="space-y-2">
+            {categoryBreakdown.map((cat) => (
+              <button
+                key={cat.name}
+                onClick={() => setCategoryFilter(categoryFilter === cat.name ? 'all' : cat.name)}
+                className={`w-full flex items-center gap-3 text-sm group hover:bg-surface-800/50 rounded-lg px-2 py-1 transition-colors ${
+                  categoryFilter === cat.name ? 'bg-surface-800/50' : ''
+                }`}
+              >
+                <span className="text-surface-300 w-40 text-left truncate">{cat.name}</span>
+                <div className="flex-1 h-2 bg-surface-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-accent-500 transition-all"
+                    style={{ width: `${cat.percent}%` }}
+                  />
+                </div>
+                <span className="text-surface-400 text-xs w-12 text-right">{cat.count}</span>
+                <span className="text-surface-500 text-xs w-10 text-right">{cat.percent}%</span>
+              </button>
+            ))}
+          </div>
+          {categoryFilter !== 'all' && (
+            <button
+              onClick={() => setCategoryFilter('all')}
+              className="text-accent-400 hover:text-accent-300 text-xs mt-2 transition-colors"
+            >
+              Clear filter
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <input
@@ -123,6 +170,8 @@ export default function WorkoutBrowserTab({ data }: WorkoutBrowserTabProps) {
             isExpanded={expandedId === workout.scoreId}
             onToggle={() => setExpandedId(expandedId === workout.scoreId ? null : workout.scoreId)}
             similarWorkouts={expandedId === workout.scoreId ? similarWorkouts : []}
+            allCategories={data.allCategories}
+            onCategoryChange={onWorkoutCategoryChange}
           />
         ))}
         {filtered.length > 50 && (
@@ -145,11 +194,15 @@ function WorkoutCard({
   isExpanded,
   onToggle,
   similarWorkouts,
+  allCategories,
+  onCategoryChange,
 }: {
   workout: DashboardWorkout;
   isExpanded: boolean;
   onToggle: () => void;
   similarWorkouts: DashboardWorkout[];
+  allCategories: { id: number; name: string }[];
+  onCategoryChange?: (workoutId: number, categoryId: number | null, isMonthlyChallenge?: boolean) => void;
 }) {
   const divColor = workout.rawDivision?.toLowerCase() === 'rx'
     ? 'text-green-400 bg-green-500/10'
@@ -186,19 +239,14 @@ function WorkoutCard({
               {workout.workoutType && <> &middot; {workout.workoutType.replace(/_/g, ' ')}</>}
             </p>
           </div>
-          {workout.similarityCluster && (
-            <div className="text-surface-500 text-xs shrink-0">
-              {(similarWorkouts.length > 0 || !isExpanded) && ''}
-              <svg
-                className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          )}
+          <svg
+            className={`w-4 h-4 text-surface-500 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
         </div>
       </button>
 
@@ -212,6 +260,40 @@ function WorkoutCard({
               {workout.rawDescription}
             </pre>
           </div>
+
+          {/* Category Editing */}
+          {onCategoryChange && (
+            <div className="flex items-center gap-4">
+              <div>
+                <h4 className="text-xs text-surface-400 font-medium mb-1">Category</h4>
+                <select
+                  value={workout.categoryId ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    onCategoryChange(workout.workoutId, val ? parseInt(val) : null);
+                  }}
+                  className="text-xs bg-surface-800 border border-surface-600 text-surface-300 rounded px-2 py-1"
+                >
+                  <option value="">Uncategorized</option>
+                  {allCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <h4 className="text-xs text-surface-400 font-medium mb-1">Monthly Challenge</h4>
+                <label className="flex items-center gap-2 text-xs text-surface-300">
+                  <input
+                    type="checkbox"
+                    checked={workout.isMonthlyChallenge ?? false}
+                    onChange={(e) => onCategoryChange(workout.workoutId, undefined as unknown as number | null, e.target.checked)}
+                    className="rounded border-surface-600 bg-surface-800"
+                  />
+                  Exclude from insights
+                </label>
+              </div>
+            </div>
+          )}
 
           {/* Personal Notes */}
           {workout.rawNotes && (
@@ -273,4 +355,3 @@ function WorkoutCard({
     </div>
   );
 }
-
