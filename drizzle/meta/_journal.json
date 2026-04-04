@@ -78,6 +78,13 @@
       "when": 1775245957115,
       "tag": "0010_add-parsed-score-columns",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1775339661670,
+      "tag": "0011_add-hyrox-tracker",
+      "breakpoints": true
     }
   ]
 }

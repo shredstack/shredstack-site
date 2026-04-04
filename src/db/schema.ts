@@ -187,6 +187,57 @@ export const crossfitUserMovementPerformance = pgTable('crossfit_user_movement_p
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
+// ============================================================
+// HYROX TRAINING TRACKER
+// ============================================================
+
+export const hyroxTrainingPlans = pgTable('hyrox_training_plans', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => crossfitUsers.id).notNull(),
+  week: integer('week').notNull(),
+  dayOfWeek: varchar('day_of_week', { length: 10 }).notNull(),
+  sessionType: varchar('session_type', { length: 50 }).notNull(),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: text('description').notNull(),
+  targetPace: varchar('target_pace', { length: 50 }),
+  targetDurationMin: integer('target_duration_min'),
+  targetStations: text('target_stations').array(),
+  phase: varchar('phase', { length: 50 }).notNull(),
+  phaseNumber: integer('phase_number').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  uniqueIndex('hyrox_training_plans_user_week_day_idx')
+    .on(table.userId, table.week, table.dayOfWeek),
+]);
+
+export const hyroxSessionLogs = pgTable('hyrox_session_logs', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => crossfitUsers.id).notNull(),
+  planSessionId: integer('plan_session_id').references(() => hyroxTrainingPlans.id),
+  completedAt: timestamp('completed_at', { withTimezone: true }).notNull(),
+  sessionType: varchar('session_type', { length: 50 }).notNull(),
+  actualDurationMin: integer('actual_duration_min'),
+  notes: text('notes'),
+  rpe: integer('rpe'),
+  runPace: varchar('run_pace', { length: 50 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+export const hyroxStationBenchmarks = pgTable('hyrox_station_benchmarks', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => crossfitUsers.id).notNull(),
+  sessionLogId: integer('session_log_id').references(() => hyroxSessionLogs.id, { onDelete: 'cascade' }),
+  station: varchar('station', { length: 50 }).notNull(),
+  timeSeconds: integer('time_seconds').notNull(),
+  distance: varchar('distance', { length: 50 }),
+  isFullDistance: boolean('is_full_distance').default(true),
+  notes: text('notes'),
+  source: varchar('source', { length: 50 }).notNull(),
+  recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
 // Type exports for use in application code
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type NewBlogPost = typeof blogPosts.$inferInsert;
@@ -201,3 +252,6 @@ export type CrossfitMovement = typeof crossfitMovements.$inferSelect;
 export type CrossfitWorkoutMovement = typeof crossfitWorkoutMovements.$inferSelect;
 export type CrossfitUserScore = typeof crossfitUserScores.$inferSelect;
 export type CrossfitUserMovementPerformance = typeof crossfitUserMovementPerformance.$inferSelect;
+export type HyroxTrainingPlan = typeof hyroxTrainingPlans.$inferSelect;
+export type HyroxSessionLog = typeof hyroxSessionLogs.$inferSelect;
+export type HyroxStationBenchmark = typeof hyroxStationBenchmarks.$inferSelect;
