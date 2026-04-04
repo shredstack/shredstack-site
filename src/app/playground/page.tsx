@@ -23,6 +23,14 @@ const liveExperiments = [
     gradient: "from-rainbow-purple to-rainbow-cyan",
     href: "/playground/smart-cfd",
   },
+  {
+    name: "HYROX Training Tracker",
+    description:
+      "Track your 24-week sub-60 HYROX training plan — log runs, station skills, benchmark times, and see your estimated race finish.",
+    icon: "\u{1F3C3}\u200D\u2640\uFE0F",
+    gradient: "from-rainbow-orange to-rainbow-pink",
+    href: "/playground/hyrox-tracker",
+  },
 ];
 
 const upcomingExperiments = [
