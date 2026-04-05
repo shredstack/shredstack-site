@@ -379,28 +379,32 @@ function LogBenchmarkModal({ station, onClose, onSaved }: LogBenchmarkModalProps
         {/* Time input */}
         <div>
           <label className="block text-sm text-surface-400 mb-2">Time</label>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={timeMinutes}
-              onChange={e => setTimeMinutes(e.target.value)}
+              onChange={e => setTimeMinutes(e.target.value.replace(/\D/g, ''))}
               placeholder="MM"
-              min="0"
-              className="w-20 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-surface-200 text-center text-lg"
+              className="w-24 bg-surface-800 border border-surface-700 rounded-lg px-3 py-3 text-surface-200 text-center text-xl"
               autoFocus
             />
-            <span className="text-surface-400 text-lg font-bold">:</span>
+            <span className="text-surface-400 text-xl font-bold">:</span>
             <input
-              type="number"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={timeSeconds}
-              onChange={e => setTimeSeconds(e.target.value)}
+              onChange={e => {
+                const val = e.target.value.replace(/\D/g, '');
+                if (val === '' || parseInt(val) <= 59) setTimeSeconds(val);
+              }}
               placeholder="SS"
-              min="0"
-              max="59"
-              className="w-20 bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-surface-200 text-center text-lg"
+              className="w-24 bg-surface-800 border border-surface-700 rounded-lg px-3 py-3 text-surface-200 text-center text-xl"
             />
             {previewDelta !== null && previewSeconds > 0 && (
-              <span className={`text-sm ml-2 ${previewDelta <= 0 ? 'text-green-400' : previewDelta <= (targetB - targetA) ? 'text-yellow-400' : 'text-red-400'}`}>
+              <span className={`text-sm w-full sm:w-auto mt-1 sm:mt-0 sm:ml-2 ${previewDelta <= 0 ? 'text-green-400' : previewDelta <= (targetB - targetA) ? 'text-yellow-400' : 'text-red-400'}`}>
                 {previewDelta > 0 ? '+' : '-'}{formatTime(Math.abs(previewDelta))}
               </span>
             )}

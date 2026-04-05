@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { hyroxTrainingPlans, hyroxSessionLogs } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { verifySession } from '@/lib/smart-cfd-auth';
 import { PHASES } from '@/lib/hyrox-utils';
+import { seedHyroxPlanForUser } from '@/lib/hyrox-seed';
 
 export async function GET(request: NextRequest) {
   const session = await verifySession();
@@ -16,9 +17,17 @@ export async function GET(request: NextRequest) {
     const phaseFilter = searchParams.get('phase');
 
     // Fetch all plan sessions for this user
-    const planSessions = await db.select()
+    let planSessions = await db.select()
       .from(hyroxTrainingPlans)
       .where(eq(hyroxTrainingPlans.userId, session.userId));
+
+    // Auto-seed the 24-week plan on first access
+    if (planSessions.length === 0) {
+      await seedHyroxPlanForUser(session.userId);
+      planSessions = await db.select()
+        .from(hyroxTrainingPlans)
+        .where(eq(hyroxTrainingPlans.userId, session.userId));
+    }
 
     // Fetch all session logs for this user
     const sessionLogs = await db.select()
