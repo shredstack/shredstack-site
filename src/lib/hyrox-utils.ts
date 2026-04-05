@@ -100,26 +100,25 @@ export interface EstimateSegment {
   usingFallback: boolean;
 }
 
+export const DEFAULT_FINISH_SECONDS = 5400; // 1:30:00 default for new users
+
 export interface EstimateResult {
   estimatedFinishSeconds: number;
   estimatedFinish: string;
-  totalRunSeconds: number;
-  totalStationSeconds: number;
+  totalRunSeconds: number | null;
+  totalStationSeconds: number | null;
   transitionSeconds: number;
+  isDefault: boolean;
   segments: EstimateSegment[];
   missingStations: SegmentId[];
   readiness: { benchmarked: number; total: number; percentage: number };
-  scenarioComparison: { vsA: string; vsB: string };
+  scenarioComparison: { vsA: string; vsB: string } | null;
 }
 
 export function calculateEstimate(benchmarks: Partial<Record<SegmentId, number>>): EstimateResult {
-  const runTotal = (benchmarks.run_1km || SCENARIO_B.run_1km) * 8;
   const stationIds = HYROX_STATIONS.map(s => s.id);
-  const stationTotal = stationIds.reduce((sum, s) =>
-    sum + (benchmarks[s] || SCENARIO_B[s]), 0);
-  const total = runTotal + stationTotal + TRANSITION_SECONDS;
-
   const allSegmentIds: SegmentId[] = ['run_1km', ...stationIds];
+
   const segments: EstimateSegment[] = allSegmentIds.map(s => ({
     station: s,
     name: s === 'run_1km' ? 'Run (1km avg)' : HYROX_STATIONS.find(st => st.id === s)!.name,
@@ -131,6 +130,30 @@ export function calculateEstimate(benchmarks: Partial<Record<SegmentId, number>>
   }));
 
   const missing = segments.filter(s => s.usingFallback).map(s => s.station);
+  const allBenchmarked = missing.length === 0;
+
+  if (!allBenchmarked) {
+    return {
+      estimatedFinishSeconds: DEFAULT_FINISH_SECONDS,
+      estimatedFinish: formatTime(DEFAULT_FINISH_SECONDS),
+      totalRunSeconds: null,
+      totalStationSeconds: null,
+      transitionSeconds: TRANSITION_SECONDS,
+      isDefault: true,
+      segments,
+      missingStations: missing,
+      readiness: {
+        benchmarked: 9 - missing.length,
+        total: 9,
+        percentage: Math.round(((9 - missing.length) / 9) * 100),
+      },
+      scenarioComparison: null,
+    };
+  }
+
+  const runTotal = benchmarks.run_1km! * 8;
+  const stationTotal = stationIds.reduce((sum, s) => sum + benchmarks[s]!, 0);
+  const total = runTotal + stationTotal + TRANSITION_SECONDS;
 
   return {
     estimatedFinishSeconds: total,
@@ -138,12 +161,13 @@ export function calculateEstimate(benchmarks: Partial<Record<SegmentId, number>>
     totalRunSeconds: runTotal,
     totalStationSeconds: stationTotal,
     transitionSeconds: TRANSITION_SECONDS,
+    isDefault: false,
     segments,
     missingStations: missing,
     readiness: {
-      benchmarked: 9 - missing.length,
+      benchmarked: 9,
       total: 9,
-      percentage: Math.round(((9 - missing.length) / 9) * 100),
+      percentage: 100,
     },
     scenarioComparison: {
       vsA: formatDelta(total - sumScenario(SCENARIO_A)),

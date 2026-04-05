@@ -92,21 +92,27 @@ export default function DashboardTab() {
       {/* Estimated Finish Hero Card */}
       <div className="card p-6 text-center">
         <p className="text-sm text-surface-400 mb-1">Estimated Finish Time</p>
-        <p className={`text-5xl font-bold ${getFinishColor(estimate.estimatedFinishSeconds)}`}>
+        <p className={`text-5xl font-bold ${estimate.isDefault ? 'text-surface-400' : getFinishColor(estimate.estimatedFinishSeconds)}`}>
           {estimate.estimatedFinish}
         </p>
-        <div className="flex items-center justify-center gap-4 mt-3">
-          <span className="text-sm px-3 py-1 rounded-full bg-surface-800 text-surface-300">
-            vs Scenario A: <span className={estimate.scenarioComparison.vsA.startsWith('-') ? 'text-green-400' : 'text-red-400'}>
-              {estimate.scenarioComparison.vsA}
+        {estimate.isDefault ? (
+          <p className="text-sm text-surface-500 mt-2">
+            Log all 9 station benchmarks to see your personalized estimate
+          </p>
+        ) : (
+          <div className="flex items-center justify-center gap-4 mt-3">
+            <span className="text-sm px-3 py-1 rounded-full bg-surface-800 text-surface-300">
+              vs Scenario A: <span className={estimate.scenarioComparison!.vsA.startsWith('-') ? 'text-green-400' : 'text-red-400'}>
+                {estimate.scenarioComparison!.vsA}
+              </span>
             </span>
-          </span>
-          <span className="text-sm px-3 py-1 rounded-full bg-surface-800 text-surface-300">
-            vs Scenario B: <span className={estimate.scenarioComparison.vsB.startsWith('-') ? 'text-green-400' : 'text-red-400'}>
-              {estimate.scenarioComparison.vsB}
+            <span className="text-sm px-3 py-1 rounded-full bg-surface-800 text-surface-300">
+              vs Scenario B: <span className={estimate.scenarioComparison!.vsB.startsWith('-') ? 'text-green-400' : 'text-red-400'}>
+                {estimate.scenarioComparison!.vsB}
+              </span>
             </span>
-          </span>
-        </div>
+          </div>
+        )}
 
         {/* Readiness */}
         <div className="mt-4 flex items-center justify-center gap-2">
@@ -122,21 +128,23 @@ export default function DashboardTab() {
           )}
         </div>
 
-        {/* Breakdown */}
-        <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-surface-800">
-          <div>
-            <p className="text-xs text-surface-500">Total Run</p>
-            <p className="text-lg font-medium text-surface-200">{formatTime(estimate.totalRunSeconds)}</p>
+        {/* Breakdown — only show when we have real data */}
+        {!estimate.isDefault && (
+          <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-surface-800">
+            <div>
+              <p className="text-xs text-surface-500">Total Run</p>
+              <p className="text-lg font-medium text-surface-200">{formatTime(estimate.totalRunSeconds!)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-surface-500">Total Stations</p>
+              <p className="text-lg font-medium text-surface-200">{formatTime(estimate.totalStationSeconds!)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-surface-500">Transitions</p>
+              <p className="text-lg font-medium text-surface-200">{formatTime(estimate.transitionSeconds)}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-surface-500">Total Stations</p>
-            <p className="text-lg font-medium text-surface-200">{formatTime(estimate.totalStationSeconds)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-surface-500">Transitions</p>
-            <p className="text-lg font-medium text-surface-200">{formatTime(estimate.transitionSeconds)}</p>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Station Benchmark Cards */}
