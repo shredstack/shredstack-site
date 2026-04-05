@@ -476,9 +476,11 @@ function SessionLogModal({ session, onClose, onSaved, onDeleted }: SessionLogMod
             <div>
               <label className="block text-sm text-surface-400 mb-1">Duration (min)</label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={durationMin}
-                onChange={e => setDurationMin(e.target.value)}
+                onChange={e => setDurationMin(e.target.value.replace(/\D/g, ''))}
                 placeholder={session.targetDurationMin?.toString() || ''}
                 className="w-full bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-surface-200 text-sm"
               />
@@ -546,21 +548,28 @@ function SessionLogModal({ session, onClose, onSaved, onDeleted }: SessionLogMod
                         Full distance
                       </label>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={input.timeMinutes}
-                        onChange={e => updateStationInput(i, 'timeMinutes', e.target.value)}
+                        onChange={e => updateStationInput(i, 'timeMinutes', e.target.value.replace(/\D/g, ''))}
                         placeholder="MM"
-                        className="w-16 bg-surface-700 border border-surface-600 rounded px-2 py-1 text-sm text-surface-200 text-center"
+                        className="w-20 bg-surface-700 border border-surface-600 rounded px-2 py-2.5 text-base text-surface-200 text-center"
                       />
                       <span className="text-surface-500">:</span>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={input.timeSeconds}
-                        onChange={e => updateStationInput(i, 'timeSeconds', e.target.value)}
+                        onChange={e => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          if (val === '' || parseInt(val) <= 59) updateStationInput(i, 'timeSeconds', val);
+                        }}
                         placeholder="SS"
-                        className="w-16 bg-surface-700 border border-surface-600 rounded px-2 py-1 text-sm text-surface-200 text-center"
+                        className="w-20 bg-surface-700 border border-surface-600 rounded px-2 py-2.5 text-base text-surface-200 text-center"
                       />
                       {!input.isFullDistance && (
                         <input

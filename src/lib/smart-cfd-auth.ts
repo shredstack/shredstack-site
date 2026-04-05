@@ -15,22 +15,25 @@ function getJwtSecret() {
 }
 
 // Create a short-lived token for magic link verification
-export async function createMagicLinkToken(email: string): Promise<string> {
-  return new SignJWT({ email, purpose: 'magic-link' })
+export async function createMagicLinkToken(email: string, redirectTo?: string): Promise<string> {
+  return new SignJWT({ email, purpose: 'magic-link', redirectTo: redirectTo || undefined })
     .setProtectedHeader({ alg: 'HS256' })
     .setExpirationTime(MAGIC_LINK_EXPIRY)
     .setIssuedAt()
     .sign(getJwtSecret());
 }
 
-// Verify a magic link token and return the email
-export async function verifyMagicLinkToken(token: string): Promise<string | null> {
+// Verify a magic link token and return the email + optional redirect
+export async function verifyMagicLinkToken(token: string): Promise<{ email: string; redirectTo?: string } | null> {
   try {
     const { payload } = await jwtVerify(token, getJwtSecret());
     if (payload.purpose !== 'magic-link' || typeof payload.email !== 'string') {
       return null;
     }
-    return payload.email;
+    return {
+      email: payload.email,
+      redirectTo: typeof payload.redirectTo === 'string' ? payload.redirectTo : undefined,
+    };
   } catch {
     return null;
   }
