@@ -12,6 +12,14 @@ import {
   type SessionType,
 } from '@/lib/hyrox-utils';
 
+interface StationBenchmarkData {
+  station: string;
+  timeSeconds: number;
+  distance: string | null;
+  isFullDistance: boolean | null;
+  notes: string | null;
+}
+
 interface PlanSession {
   id: number;
   dayOfWeek: string;
@@ -24,6 +32,11 @@ interface PlanSession {
   completed: boolean;
   sessionLogId: number | null;
   completedAt: string | null;
+  actualDurationMin: number | null;
+  rpe: number | null;
+  runPace: string | null;
+  notes: string | null;
+  stationBenchmarks: StationBenchmarkData[];
 }
 
 interface Week {
@@ -51,8 +64,19 @@ interface StationBenchmarkInput {
   timeMinutes: string;
   timeSeconds: string;
   distance: string;
+  distanceUnit: string;
   isFullDistance: boolean;
   notes: string;
+}
+
+function getStationUnit(stationId: string): string {
+  const station = HYROX_STATIONS.find(s => s.id === stationId);
+  return station?.unit || 'meters';
+}
+
+function getStationAllowedUnits(stationId: string): readonly string[] {
+  const station = HYROX_STATIONS.find(s => s.id === stationId);
+  return station?.allowedUnits || ['meters'];
 }
 
 interface TrainingPlanTabProps {
@@ -319,35 +343,58 @@ function SessionLogModal({ session, onClose, onSaved, onDeleted }: SessionLogMod
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Form state
+  const isEditing = session.completed && session.sessionLogId;
+
+  // Form state — pre-populate from existing log when editing
   const [completedAt, setCompletedAt] = useState(
-    new Date().toISOString().slice(0, 10)
+    session.completedAt
+      ? new Date(session.completedAt).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10)
   );
   const [durationMin, setDurationMin] = useState(
-    session.targetDurationMin?.toString() || ''
+    session.actualDurationMin?.toString() || session.targetDurationMin?.toString() || ''
   );
-  const [rpe, setRpe] = useState('5');
-  const [runPace, setRunPace] = useState('');
-  const [notes, setNotes] = useState('');
+  const [rpe, setRpe] = useState(session.rpe?.toString() || '5');
+  const [runPace, setRunPace] = useState(session.runPace || '');
+  const [notes, setNotes] = useState(session.notes || '');
   const [showStations, setShowStations] = useState(
     isStationSession(session.sessionType as SessionType) ||
     isHyroxSession(session.sessionType as SessionType)
   );
 
   // Station benchmark inputs
+  // If session was previously logged, use ONLY saved benchmarks (respects user's adds/removes).
+  // Otherwise, pre-populate from target stations in the training plan.
   const [stationInputs, setStationInputs] = useState<StationBenchmarkInput[]>(() => {
+    const savedBenchmarks = session.stationBenchmarks || [];
+
+    if (isEditing && savedBenchmarks.length > 0) {
+      return savedBenchmarks.map(b => {
+        const mins = Math.floor(b.timeSeconds / 60);
+        const secs = b.timeSeconds % 60;
+        return {
+          station: b.station,
+          timeMinutes: mins > 0 ? mins.toString() : '',
+          timeSeconds: secs > 0 ? secs.toString() : '',
+          distance: b.distance?.replace(/[^0-9.,]/g, '') || '',
+          distanceUnit: getStationUnit(b.station),
+          isFullDistance: b.isFullDistance ?? true,
+          notes: b.notes || '',
+        };
+      });
+    }
+
     const stations = session.targetStations || [];
     return stations.map(s => ({
       station: s,
       timeMinutes: '',
       timeSeconds: '',
-      distance: HYROX_STATIONS.find(st => st.id === s)?.raceDistance || '',
-      isFullDistance: true,
+      distance: '',
+      distanceUnit: getStationUnit(s),
+      isFullDistance: false,
       notes: '',
     }));
   });
-
-  const isEditing = session.completed && session.sessionLogId;
 
   function updateStationInput(index: number, field: keyof StationBenchmarkInput, value: string | boolean) {
     setStationInputs(prev => {
@@ -363,7 +410,8 @@ function SessionLogModal({ session, onClose, onSaved, onDeleted }: SessionLogMod
       timeMinutes: '',
       timeSeconds: '',
       distance: '',
-      isFullDistance: true,
+      distanceUnit: 'meters',
+      isFullDistance: false,
       notes: '',
     }]);
   }
@@ -373,11 +421,11 @@ function SessionLogModal({ session, onClose, onSaved, onDeleted }: SessionLogMod
     try {
       // Build station benchmarks from inputs
       const stationBenchmarks = stationInputs
-        .filter(s => s.station && (s.timeMinutes || s.timeSeconds))
+        .filter(s => s.station)
         .map(s => ({
           station: s.station,
           timeSeconds: (parseInt(s.timeMinutes || '0') * 60) + parseInt(s.timeSeconds || '0'),
-          distance: s.distance || null,
+          distance: s.distance ? `${s.distance} ${s.distanceUnit}` : null,
           isFullDistance: s.isFullDistance,
           notes: s.notes || null,
         }));
@@ -393,6 +441,7 @@ function SessionLogModal({ session, onClose, onSaved, onDeleted }: SessionLogMod
             rpe: rpe ? parseInt(rpe) : null,
             runPace: runPace || null,
             notes: notes || null,
+            stationBenchmarks: stationBenchmarks.length > 0 ? stationBenchmarks : undefined,
           }),
         });
       } else {
@@ -481,8 +530,9 @@ function SessionLogModal({ session, onClose, onSaved, onDeleted }: SessionLogMod
                 pattern="[0-9]*"
                 value={durationMin}
                 onChange={e => setDurationMin(e.target.value.replace(/\D/g, ''))}
+                onFocus={e => e.target.select()}
                 placeholder={session.targetDurationMin?.toString() || ''}
-                className="w-full bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-surface-200 text-sm"
+                className="w-full bg-surface-800 border border-surface-700 rounded-lg px-3 py-2.5 text-base text-surface-200"
               />
             </div>
             <div>
@@ -528,7 +578,10 @@ function SessionLogModal({ session, onClose, onSaved, onDeleted }: SessionLogMod
                       ) : (
                         <select
                           value={input.station}
-                          onChange={e => updateStationInput(i, 'station', e.target.value)}
+                          onChange={e => {
+                            updateStationInput(i, 'station', e.target.value);
+                            updateStationInput(i, 'distanceUnit', getStationUnit(e.target.value));
+                          }}
                           className="bg-surface-700 border border-surface-600 rounded px-2 py-1 text-sm text-surface-200"
                         >
                           <option value="">Select station</option>
@@ -538,7 +591,14 @@ function SessionLogModal({ session, onClose, onSaved, onDeleted }: SessionLogMod
                           <option value="run_1km">Run (1km)</option>
                         </select>
                       )}
-                      <label className="flex items-center gap-1 ml-auto text-xs text-surface-500">
+                      <button
+                        onClick={() => setStationInputs(prev => prev.filter((_, idx) => idx !== i))}
+                        className="text-surface-600 hover:text-red-400 transition-colors ml-auto text-lg leading-none"
+                        title="Remove station"
+                      >
+                        &times;
+                      </button>
+                      <label className="flex items-center gap-1 text-xs text-surface-500">
                         <input
                           type="checkbox"
                           checked={input.isFullDistance}
@@ -555,8 +615,9 @@ function SessionLogModal({ session, onClose, onSaved, onDeleted }: SessionLogMod
                         pattern="[0-9]*"
                         value={input.timeMinutes}
                         onChange={e => updateStationInput(i, 'timeMinutes', e.target.value.replace(/\D/g, ''))}
-                        placeholder="MM"
-                        className="w-20 bg-surface-700 border border-surface-600 rounded px-2 py-2.5 text-base text-surface-200 text-center"
+                        onFocus={e => e.target.select()}
+                        placeholder="min"
+                        className="w-16 bg-surface-700 border border-surface-600 rounded px-2 py-2.5 text-base text-surface-200 text-center"
                       />
                       <span className="text-surface-500">:</span>
                       <input
@@ -568,17 +629,36 @@ function SessionLogModal({ session, onClose, onSaved, onDeleted }: SessionLogMod
                           const val = e.target.value.replace(/\D/g, '');
                           if (val === '' || parseInt(val) <= 59) updateStationInput(i, 'timeSeconds', val);
                         }}
-                        placeholder="SS"
-                        className="w-20 bg-surface-700 border border-surface-600 rounded px-2 py-2.5 text-base text-surface-200 text-center"
+                        onFocus={e => e.target.select()}
+                        placeholder="sec"
+                        className="w-16 bg-surface-700 border border-surface-600 rounded px-2 py-2.5 text-base text-surface-200 text-center"
                       />
                       {!input.isFullDistance && (
-                        <input
-                          type="text"
-                          value={input.distance}
-                          onChange={e => updateStationInput(i, 'distance', e.target.value)}
-                          placeholder="Distance"
-                          className="flex-1 bg-surface-700 border border-surface-600 rounded px-2 py-1 text-sm text-surface-200"
-                        />
+                        <div className="flex items-center gap-1 flex-1">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={input.distance}
+                            onChange={e => updateStationInput(i, 'distance', e.target.value.replace(/\D/g, ''))}
+                            onFocus={e => e.target.select()}
+                            placeholder={input.distanceUnit === 'reps' ? '# reps' : '# meters'}
+                            className="w-24 bg-surface-700 border border-surface-600 rounded px-2 py-2.5 text-base text-surface-200 text-center"
+                          />
+                          {getStationAllowedUnits(input.station).length > 1 ? (
+                            <select
+                              value={input.distanceUnit}
+                              onChange={e => updateStationInput(i, 'distanceUnit', e.target.value)}
+                              className="bg-surface-700 border border-surface-600 rounded px-1.5 py-2.5 text-xs text-surface-400"
+                            >
+                              {getStationAllowedUnits(input.station).map(u => (
+                                <option key={u} value={u}>{u}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="text-xs text-surface-500">{input.distanceUnit}</span>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>

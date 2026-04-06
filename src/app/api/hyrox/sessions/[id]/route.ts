@@ -43,6 +43,30 @@ export async function PUT(
       .where(eq(hyroxSessionLogs.id, sessionId))
       .returning();
 
+    // Replace station benchmarks if provided
+    if (body.stationBenchmarks) {
+      // Delete existing benchmarks for this session
+      await db.delete(hyroxStationBenchmarks)
+        .where(eq(hyroxStationBenchmarks.sessionLogId, sessionId));
+
+      // Insert new benchmarks
+      if (body.stationBenchmarks.length > 0) {
+        await db.insert(hyroxStationBenchmarks).values(
+          body.stationBenchmarks.map((b: { station: string; timeSeconds: number; distance: string | null; isFullDistance: boolean; notes: string | null }) => ({
+            userId: session.userId,
+            sessionLogId: sessionId,
+            station: b.station,
+            timeSeconds: b.timeSeconds,
+            distance: b.distance,
+            isFullDistance: b.isFullDistance,
+            notes: b.notes,
+            source: 'manual',
+            recordedAt: new Date(),
+          }))
+        );
+      }
+    }
+
     return NextResponse.json({ sessionLog: updated });
   } catch (error) {
     console.error('Session update error:', error);
