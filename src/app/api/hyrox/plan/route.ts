@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { hyroxTrainingPlans, hyroxSessionLogs } from '@/db/schema';
+import { hyroxTrainingPlans, hyroxSessionLogs, hyroxStationBenchmarks } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { verifySession } from '@/lib/smart-cfd-auth';
 import { PHASES } from '@/lib/hyrox-utils';
@@ -34,6 +34,21 @@ export async function GET(request: NextRequest) {
       .from(hyroxSessionLogs)
       .where(eq(hyroxSessionLogs.userId, session.userId));
 
+    // Fetch all station benchmarks for this user's session logs
+    const benchmarksByLogId = new Map<number, typeof benchmarkRows>();
+    const benchmarkRows = sessionLogs.length > 0
+      ? await db.select()
+          .from(hyroxStationBenchmarks)
+          .where(eq(hyroxStationBenchmarks.userId, session.userId))
+      : [];
+    for (const b of benchmarkRows) {
+      if (b.sessionLogId) {
+        const existing = benchmarksByLogId.get(b.sessionLogId) || [];
+        existing.push(b);
+        benchmarksByLogId.set(b.sessionLogId, existing);
+      }
+    }
+
     // Index logs by planSessionId for quick lookup
     const logsByPlanId = new Map<number, typeof sessionLogs[0]>();
     for (const log of sessionLogs) {
@@ -62,6 +77,7 @@ export async function GET(request: NextRequest) {
           })
           .map(s => {
             const log = logsByPlanId.get(s.id);
+            const benchmarks = log ? (benchmarksByLogId.get(log.id) || []) : [];
             return {
               id: s.id,
               dayOfWeek: s.dayOfWeek,
@@ -74,6 +90,17 @@ export async function GET(request: NextRequest) {
               completed: !!log,
               sessionLogId: log?.id ?? null,
               completedAt: log?.completedAt ?? null,
+              actualDurationMin: log?.actualDurationMin ?? null,
+              rpe: log?.rpe ?? null,
+              runPace: log?.runPace ?? null,
+              notes: log?.notes ?? null,
+              stationBenchmarks: benchmarks.map(b => ({
+                station: b.station,
+                timeSeconds: b.timeSeconds,
+                distance: b.distance,
+                isFullDistance: b.isFullDistance,
+                notes: b.notes,
+              })),
             };
           });
 

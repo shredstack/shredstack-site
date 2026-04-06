@@ -1,14 +1,14 @@
 // HYROX Training Tracker — constants, scenarios, and finish time calculator
 
 export const HYROX_STATIONS = [
-  { id: 'skierg', name: 'SkiErg', raceDistance: '1,000m', unit: 'meters' },
-  { id: 'sled_push', name: 'Sled Push', raceDistance: '50m', unit: 'meters' },
-  { id: 'sled_pull', name: 'Sled Pull', raceDistance: '50m', unit: 'meters' },
-  { id: 'burpee_broad_jump', name: 'Burpee Broad Jumps', raceDistance: '80m', unit: 'meters' },
-  { id: 'rowing', name: 'Rowing', raceDistance: '1,000m', unit: 'meters' },
-  { id: 'farmers_carry', name: 'Farmers Carry', raceDistance: '200m', unit: 'meters' },
-  { id: 'sandbag_lunges', name: 'Sandbag Lunges', raceDistance: '100m', unit: 'meters' },
-  { id: 'wall_balls', name: 'Wall Balls', raceDistance: '100 reps', unit: 'reps' },
+  { id: 'skierg', name: 'SkiErg', raceDistance: '1,000m', unit: 'meters', allowedUnits: ['meters'] },
+  { id: 'sled_push', name: 'Sled Push', raceDistance: '50m', unit: 'meters', allowedUnits: ['meters'] },
+  { id: 'sled_pull', name: 'Sled Pull', raceDistance: '50m', unit: 'meters', allowedUnits: ['meters'] },
+  { id: 'burpee_broad_jump', name: 'Burpee Broad Jumps', raceDistance: '80m', unit: 'meters', allowedUnits: ['meters', 'reps'] },
+  { id: 'rowing', name: 'Rowing', raceDistance: '1,000m', unit: 'meters', allowedUnits: ['meters'] },
+  { id: 'farmers_carry', name: 'Farmers Carry', raceDistance: '200m', unit: 'meters', allowedUnits: ['meters'] },
+  { id: 'sandbag_lunges', name: 'Sandbag Lunges', raceDistance: '100m', unit: 'meters', allowedUnits: ['meters', 'reps'] },
+  { id: 'wall_balls', name: 'Wall Balls', raceDistance: '100 reps', unit: 'reps', allowedUnits: ['reps'] },
 ] as const;
 
 export type StationId = typeof HYROX_STATIONS[number]['id'];
@@ -43,7 +43,7 @@ export const SCENARIO_B: Record<SegmentId, number> = {
   wall_balls: 225,          // 3:45
 };
 
-export const TRANSITION_SECONDS = 150; // 8 transitions x ~19 sec
+export const TRANSITION_SECONDS = 300; // ~5 min total for 8 station transitions
 
 export const RACE_DATE = new Date('2026-09-18');
 export const PLAN_START_DATE = new Date('2026-04-06');
