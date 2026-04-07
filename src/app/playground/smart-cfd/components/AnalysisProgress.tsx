@@ -78,8 +78,16 @@ export default function AnalysisProgress({ onComplete }: AnalysisProgressProps) 
         }
 
         if (!res.ok) {
-          const data = await res.json();
-          setState({ phase: 'error', message: data.error || 'Analysis failed' });
+          let message = 'Analysis failed';
+          const text = await res.text().catch(() => '');
+          try {
+            const data = JSON.parse(text);
+            message = data.error || message;
+          } catch {
+            // Vercel platform errors (e.g. timeouts) return plain text, not JSON
+            if (text) message = text;
+          }
+          setState({ phase: 'error', message });
           return;
         }
 
