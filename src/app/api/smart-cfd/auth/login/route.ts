@@ -22,12 +22,27 @@ export async function POST(request: NextRequest) {
       ? redirectTo
       : undefined;
 
+    const isHyrox = validRedirect?.includes('hyrox-tracker');
+
+    // Gate CrossFit Smart Insights to allowed emails only
+    if (!isHyrox) {
+      const allowedEmails = [
+        'sarah.dorich@gmail.com',
+        'shredstacksarah@gmail.com',
+      ];
+      if (!allowedEmails.includes(email.toLowerCase())) {
+        return NextResponse.json(
+          { error: 'CrossFit Smart Insights is currently in private beta. Access is limited to invited users.' },
+          { status: 403 }
+        );
+      }
+    }
+
     const token = await createMagicLinkToken(email, validRedirect);
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || request.nextUrl.origin;
     const verifyUrl = `${baseUrl}/api/smart-cfd/auth/verify?token=${token}`;
 
-    const isHyrox = validRedirect?.includes('hyrox-tracker');
     const emailTitle = isHyrox ? 'HYROX Training Tracker' : 'Smart CFD Insights';
     const emailSubject = `Sign in to ${emailTitle}`;
     const accentColor = isHyrox ? '#f97316' : '#6366f1';
