@@ -85,6 +85,13 @@
       "when": 1775339661670,
       "tag": "0011_add-hyrox-tracker",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1777397294720,
+      "tag": "0012_add-daily-movers",
+      "breakpoints": true
     }
   ]
 }

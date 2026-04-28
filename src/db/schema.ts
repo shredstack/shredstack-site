@@ -1,4 +1,4 @@
-import { pgTable, serial, varchar, text, boolean, timestamp, integer, real, uniqueIndex, doublePrecision, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, serial, varchar, text, boolean, timestamp, integer, real, uniqueIndex, index, date, doublePrecision, jsonb } from 'drizzle-orm/pg-core';
 
 export const blogPosts = pgTable('blog_posts', {
   id: serial('id').primaryKey(),
@@ -238,6 +238,29 @@ export const hyroxStationBenchmarks = pgTable('hyrox_station_benchmarks', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 });
 
+// ============================================================
+// DAILY MOVERS
+// ============================================================
+
+export const dailyMoversSessions = pgTable('daily_movers_sessions', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => crossfitUsers.id).notNull(),
+  loggedDate: date('logged_date').notNull(),
+  cycleWeek: integer('cycle_week').notNull(),
+  slot: varchar('slot', { length: 20 }).notNull(),
+  // 'block_a' | 'block_b' | 'stretch'
+  completedAt: timestamp('completed_at', { withTimezone: true }).notNull(),
+  notes: text('notes'),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  uniqueIndex('daily_movers_sessions_user_date_slot_idx')
+    .on(table.userId, table.loggedDate, table.slot),
+  index('daily_movers_sessions_user_date_idx')
+    .on(table.userId, table.loggedDate),
+]);
+
 // Type exports for use in application code
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type NewBlogPost = typeof blogPosts.$inferInsert;
@@ -255,3 +278,5 @@ export type CrossfitUserMovementPerformance = typeof crossfitUserMovementPerform
 export type HyroxTrainingPlan = typeof hyroxTrainingPlans.$inferSelect;
 export type HyroxSessionLog = typeof hyroxSessionLogs.$inferSelect;
 export type HyroxStationBenchmark = typeof hyroxStationBenchmarks.$inferSelect;
+export type DailyMoversSession = typeof dailyMoversSessions.$inferSelect;
+export type NewDailyMoversSession = typeof dailyMoversSessions.$inferInsert;
