@@ -31,6 +31,14 @@ const liveExperiments = [
     gradient: "from-rainbow-orange to-rainbow-pink",
     href: "/playground/hyrox-tracker",
   },
+  {
+    name: "Daily Movers",
+    description:
+      "Log short office-based mobility, strength-endurance, and stretching sessions on a 4-week rotating program — supplement your HYROX or CrossFit training in 5–10 minute blocks.",
+    icon: "\u{1FA91}",
+    gradient: "from-rainbow-cyan to-rainbow-purple",
+    href: "/playground/daily-movers",
+  },
 ];
 
 const upcomingExperiments = [
