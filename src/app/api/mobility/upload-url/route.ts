@@ -1,8 +1,8 @@
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { mobilityExercises } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { mobilityExercises, mobilityExerciseVideos } from '@/db/schema';
+import { eq, max } from 'drizzle-orm';
 
 export async function POST(request: NextRequest) {
   const body = (await request.json()) as HandleUploadBody;
@@ -12,8 +12,6 @@ export async function POST(request: NextRequest) {
       body,
       request,
       onBeforeGenerateToken: async (pathname, clientPayload) => {
-        // Validate the exerciseId in the client payload up front so we don't
-        // hand out an upload token for a row that doesn't exist.
         const parsed = parseClientPayload(clientPayload);
         if (parsed === null) {
           throw new Error('clientPayload must be JSON with an integer exerciseId');
@@ -36,14 +34,17 @@ export async function POST(request: NextRequest) {
         if (!tokenPayload) return;
         try {
           const { exerciseId } = JSON.parse(tokenPayload) as { exerciseId: number };
-          await db
-            .update(mobilityExercises)
-            .set({
-              videoUrl: blob.url,
-              videoFilename: blob.pathname,
-              updatedAt: new Date(),
-            })
-            .where(eq(mobilityExercises.id, exerciseId));
+          const [maxRow] = await db
+            .select({ max: max(mobilityExerciseVideos.sortOrder) })
+            .from(mobilityExerciseVideos)
+            .where(eq(mobilityExerciseVideos.exerciseId, exerciseId));
+          const nextOrder = (maxRow?.max ?? -1) + 1;
+          await db.insert(mobilityExerciseVideos).values({
+            exerciseId,
+            url: blob.url,
+            filename: blob.pathname,
+            sortOrder: nextOrder,
+          });
         } catch (err) {
           console.error('Mobility upload completion handler error:', err);
         }

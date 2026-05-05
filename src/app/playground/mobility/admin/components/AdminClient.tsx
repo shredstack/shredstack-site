@@ -3,17 +3,18 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { upload } from '@vercel/blob/client';
-import type { MobilityExercise } from '@/db/schema';
 import {
   CATEGORY_HINT,
   CATEGORY_LABELS,
   isDailyCategory,
+  type ExerciseWithRelations,
+  type ExerciseVideoEntry,
   type MobilityCategory,
   type MobilityDay,
 } from '@/lib/mobility/program';
 
 interface Props {
-  initialExercises: MobilityExercise[];
+  initialExercises: ExerciseWithRelations[];
 }
 
 interface RowState {
@@ -33,7 +34,7 @@ const DEFAULT_ROW_STATE: RowState = {
 const DAYS: MobilityDay[] = [1, 2, 3];
 
 export default function AdminClient({ initialExercises }: Props) {
-  const [exercises, setExercises] = useState<MobilityExercise[]>(initialExercises);
+  const [exercises, setExercises] = useState<ExerciseWithRelations[]>(initialExercises);
   const [rowState, setRowState] = useState<Record<number, RowState>>({});
   const [creatingFor, setCreatingFor] = useState<string | null>(null);
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -49,15 +50,27 @@ export default function AdminClient({ initialExercises }: Props) {
     }));
   }
 
-  function patchExercise(id: number, patch: Partial<MobilityExercise>) {
+  function patchExercise(id: number, patch: Partial<ExerciseWithRelations>) {
     setExercises((prev) =>
       prev.map((ex) => (ex.id === id ? { ...ex, ...patch } : ex)),
     );
   }
 
-  async function saveField(
+  async function refreshExerciseVideos(id: number) {
+    try {
+      const res = await fetch('/api/mobility/exercises');
+      if (!res.ok) return;
+      const data = (await res.json()) as { exercises: ExerciseWithRelations[] };
+      const fresh = data.exercises.find((e) => e.id === id);
+      if (fresh) patchExercise(id, { videos: fresh.videos });
+    } catch (err) {
+      console.error('Failed to refresh videos', err);
+    }
+  }
+
+  async function saveTextField(
     id: number,
-    field: 'name' | 'setsReps' | 'notes' | 'videoUrl',
+    field: 'name' | 'setsReps' | 'notes',
     value: string | null,
   ) {
     updateRowState(id, { saving: true, error: null });
@@ -80,16 +93,55 @@ export default function AdminClient({ initialExercises }: Props) {
     }
   }
 
-  async function handleFile(id: number, file: File) {
+  async function saveDays(id: number, days: number[]) {
+    updateRowState(id, { saving: true, error: null });
+    try {
+      const res = await fetch(`/api/mobility/exercises/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ days }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? 'Save failed');
+      }
+      const data = (await res.json()) as {
+        days: number[];
+        orderByDay: Record<number, number>;
+      };
+      patchExercise(id, { days: data.days, orderByDay: data.orderByDay });
+      updateRowState(id, { saving: false });
+    } catch (err) {
+      updateRowState(id, {
+        saving: false,
+        error: err instanceof Error ? err.message : 'Save failed',
+      });
+    }
+  }
+
+  async function toggleDay(ex: ExerciseWithRelations, day: MobilityDay) {
+    const next = ex.days.includes(day)
+      ? ex.days.filter((d) => d !== day)
+      : [...ex.days, day].sort((a, b) => a - b);
+    if (next.length === 0) {
+      setGlobalError('An exercise must be assigned to at least one day.');
+      return;
+    }
+    await saveDays(ex.id, next);
+  }
+
+  async function handleVideoFile(id: number, file: File) {
     updateRowState(id, { uploading: true, uploadProgress: 0, error: null });
     try {
-      const blob = await upload(file.name, file, {
+      await upload(file.name, file, {
         access: 'public',
         handleUploadUrl: '/api/mobility/upload-url',
         clientPayload: JSON.stringify({ exerciseId: id }),
         onUploadProgress: (p) => updateRowState(id, { uploadProgress: p.percentage }),
       });
-      patchExercise(id, { videoUrl: blob.url, videoFilename: blob.pathname });
+      // The server's onUploadCompleted has inserted the video row. Refresh
+      // this exercise's videos to pick up the new id.
+      await refreshExerciseVideos(id);
       updateRowState(id, { uploading: false, uploadProgress: 100 });
     } catch (err) {
       updateRowState(id, {
@@ -99,12 +151,58 @@ export default function AdminClient({ initialExercises }: Props) {
     }
   }
 
-  async function clearVideo(id: number) {
-    if (!window.confirm('Remove the video link from this exercise? (The blob file is not deleted.)')) {
+  async function deleteVideo(exerciseId: number, videoId: number) {
+    if (!window.confirm('Remove this video link from the exercise? (The blob file is not deleted.)')) {
       return;
     }
-    patchExercise(id, { videoUrl: null, videoFilename: null });
-    await saveField(id, 'videoUrl', null);
+    try {
+      const res = await fetch(
+        `/api/mobility/exercises/${exerciseId}/videos/${videoId}`,
+        { method: 'DELETE' },
+      );
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? 'Delete failed');
+      }
+      patchExercise(exerciseId, {
+        videos: (exercises.find((e) => e.id === exerciseId)?.videos ?? []).filter(
+          (v) => v.id !== videoId,
+        ),
+      });
+    } catch (err) {
+      setGlobalError(err instanceof Error ? err.message : 'Delete failed');
+    }
+  }
+
+  async function saveVideoLabel(
+    exerciseId: number,
+    videoId: number,
+    label: string | null,
+  ) {
+    try {
+      const res = await fetch(
+        `/api/mobility/exercises/${exerciseId}/videos/${videoId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label }),
+        },
+      );
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? 'Save failed');
+      }
+      const ex = exercises.find((e) => e.id === exerciseId);
+      if (ex) {
+        patchExercise(exerciseId, {
+          videos: ex.videos.map((v) =>
+            v.id === videoId ? { ...v, label } : v,
+          ),
+        });
+      }
+    } catch (err) {
+      setGlobalError(err instanceof Error ? err.message : 'Save failed');
+    }
   }
 
   async function handleAdd(category: MobilityCategory, day: MobilityDay | null) {
@@ -112,10 +210,15 @@ export default function AdminClient({ initialExercises }: Props) {
     setCreatingFor(key);
     setGlobalError(null);
     try {
+      const body: Record<string, unknown> = { category };
+      if (!isDailyCategory(category)) {
+        if (day === null) throw new Error('day required for exercise items');
+        body.days = [day];
+      }
       const res = await fetch('/api/mobility/exercises', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category, day: day ?? undefined }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -130,7 +233,7 @@ export default function AdminClient({ initialExercises }: Props) {
     }
   }
 
-  async function handleDelete(ex: MobilityExercise) {
+  async function handleDelete(ex: ExerciseWithRelations) {
     const ok = window.confirm(
       `Delete "${ex.name}"? This also removes any past completion history for this item.`,
     );
@@ -181,29 +284,40 @@ export default function AdminClient({ initialExercises }: Props) {
         )}
 
         <div className="space-y-8">
-          {DAYS.map((day) => (
-            <Section
-              key={`day-${day}`}
-              title={`Day ${day} — Exercises`}
-              hint={null}
-              category="exercise"
-              day={day}
-              creatingKey={creatingFor}
-              addLabel="+ Add exercise"
-              items={exercises.filter(
-                (ex) => ex.day === day && ex.category === 'exercise',
-              )}
-              onAdd={handleAdd}
-              onDelete={handleDelete}
-              onSaveField={(id, field, value) => {
-                patchExercise(id, { [field]: value } as Partial<MobilityExercise>);
-                saveField(id, field, value);
-              }}
-              onUpload={handleFile}
-              onClearVideo={clearVideo}
-              getRowState={getRowState}
-            />
-          ))}
+          {DAYS.map((day) => {
+            const items = exercises.filter(
+              (ex) => ex.category === 'exercise' && ex.days.includes(day),
+            );
+            return (
+              <Section
+                key={`day-${day}`}
+                title={`Day ${day} — Exercises`}
+                hint="Tip: assign one exercise to multiple days using the day badges below."
+                category="exercise"
+                day={day}
+                creatingKey={creatingFor}
+                addLabel="+ Add exercise"
+                items={items}
+                sortBy={(a, b) => {
+                  const ao = a.orderByDay[day] ?? Number.MAX_SAFE_INTEGER;
+                  const bo = b.orderByDay[day] ?? Number.MAX_SAFE_INTEGER;
+                  if (ao !== bo) return ao - bo;
+                  return a.id - b.id;
+                }}
+                onAdd={handleAdd}
+                onDelete={handleDelete}
+                onSaveTextField={(id, field, value) => {
+                  patchExercise(id, { [field]: value } as Partial<ExerciseWithRelations>);
+                  saveTextField(id, field, value);
+                }}
+                onToggleDay={toggleDay}
+                onUpload={handleVideoFile}
+                onDeleteVideo={deleteVideo}
+                onSaveVideoLabel={saveVideoLabel}
+                getRowState={getRowState}
+              />
+            );
+          })}
 
           <Section
             title="Stretches"
@@ -213,14 +327,17 @@ export default function AdminClient({ initialExercises }: Props) {
             creatingKey={creatingFor}
             addLabel="+ Add stretch"
             items={exercises.filter((ex) => ex.category === 'stretch')}
+            sortBy={(a, b) => a.orderInDay - b.orderInDay || a.id - b.id}
             onAdd={handleAdd}
             onDelete={handleDelete}
-            onSaveField={(id, field, value) => {
-              patchExercise(id, { [field]: value } as Partial<MobilityExercise>);
-              saveField(id, field, value);
+            onSaveTextField={(id, field, value) => {
+              patchExercise(id, { [field]: value } as Partial<ExerciseWithRelations>);
+              saveTextField(id, field, value);
             }}
-            onUpload={handleFile}
-            onClearVideo={clearVideo}
+            onToggleDay={toggleDay}
+            onUpload={handleVideoFile}
+            onDeleteVideo={deleteVideo}
+            onSaveVideoLabel={saveVideoLabel}
             getRowState={getRowState}
           />
 
@@ -232,14 +349,17 @@ export default function AdminClient({ initialExercises }: Props) {
             creatingKey={creatingFor}
             addLabel="+ Add recovery item"
             items={exercises.filter((ex) => ex.category === 'recovery_at_athlecare')}
+            sortBy={(a, b) => a.orderInDay - b.orderInDay || a.id - b.id}
             onAdd={handleAdd}
             onDelete={handleDelete}
-            onSaveField={(id, field, value) => {
-              patchExercise(id, { [field]: value } as Partial<MobilityExercise>);
-              saveField(id, field, value);
+            onSaveTextField={(id, field, value) => {
+              patchExercise(id, { [field]: value } as Partial<ExerciseWithRelations>);
+              saveTextField(id, field, value);
             }}
-            onUpload={handleFile}
-            onClearVideo={clearVideo}
+            onToggleDay={toggleDay}
+            onUpload={handleVideoFile}
+            onDeleteVideo={deleteVideo}
+            onSaveVideoLabel={saveVideoLabel}
             getRowState={getRowState}
           />
         </div>
@@ -259,16 +379,19 @@ interface SectionProps {
   day: MobilityDay | null;
   creatingKey: string | null;
   addLabel: string;
-  items: MobilityExercise[];
+  items: ExerciseWithRelations[];
+  sortBy: (a: ExerciseWithRelations, b: ExerciseWithRelations) => number;
   onAdd: (category: MobilityCategory, day: MobilityDay | null) => void;
-  onDelete: (ex: MobilityExercise) => void;
-  onSaveField: (
+  onDelete: (ex: ExerciseWithRelations) => void;
+  onSaveTextField: (
     id: number,
-    field: 'name' | 'setsReps' | 'notes' | 'videoUrl',
+    field: 'name' | 'setsReps' | 'notes',
     value: string | null,
   ) => void;
+  onToggleDay: (ex: ExerciseWithRelations, day: MobilityDay) => void;
   onUpload: (id: number, file: File) => void;
-  onClearVideo: (id: number) => void;
+  onDeleteVideo: (exerciseId: number, videoId: number) => void;
+  onSaveVideoLabel: (exerciseId: number, videoId: number, label: string | null) => void;
   getRowState: (id: number) => RowState;
 }
 
@@ -280,18 +403,18 @@ function Section({
   creatingKey,
   addLabel,
   items,
+  sortBy,
   onAdd,
   onDelete,
-  onSaveField,
+  onSaveTextField,
+  onToggleDay,
   onUpload,
-  onClearVideo,
+  onDeleteVideo,
+  onSaveVideoLabel,
   getRowState,
 }: SectionProps) {
   const isCreating = creatingKey === sectionKey(category, day);
-  const sortedItems = [...items].sort((a, b) => {
-    if (a.orderInDay !== b.orderInDay) return a.orderInDay - b.orderInDay;
-    return a.id - b.id;
-  });
+  const sortedItems = [...items].sort(sortBy);
 
   return (
     <section>
@@ -310,10 +433,13 @@ function Section({
             <ExerciseRow
               key={ex.id}
               exercise={ex}
+              currentDay={day}
               state={getRowState(ex.id)}
-              onSaveField={(field, value) => onSaveField(ex.id, field, value)}
+              onSaveTextField={(field, value) => onSaveTextField(ex.id, field, value)}
+              onToggleDay={(d) => onToggleDay(ex, d)}
               onUpload={(file) => onUpload(ex.id, file)}
-              onClearVideo={() => onClearVideo(ex.id)}
+              onDeleteVideo={(videoId) => onDeleteVideo(ex.id, videoId)}
+              onSaveVideoLabel={(videoId, label) => onSaveVideoLabel(ex.id, videoId, label)}
               onDelete={() => onDelete(ex)}
             />
           ))
@@ -332,37 +458,70 @@ function Section({
 }
 
 interface ExerciseRowProps {
-  exercise: MobilityExercise;
+  exercise: ExerciseWithRelations;
+  currentDay: MobilityDay | null;
   state: RowState;
-  onSaveField: (field: 'name' | 'setsReps' | 'notes' | 'videoUrl', value: string | null) => void;
+  onSaveTextField: (field: 'name' | 'setsReps' | 'notes', value: string | null) => void;
+  onToggleDay: (day: MobilityDay) => void;
   onUpload: (file: File) => void;
-  onClearVideo: () => void;
+  onDeleteVideo: (videoId: number) => void;
+  onSaveVideoLabel: (videoId: number, label: string | null) => void;
   onDelete: () => void;
 }
 
 function ExerciseRow({
   exercise,
+  currentDay,
   state,
-  onSaveField,
+  onSaveTextField,
+  onToggleDay,
   onUpload,
-  onClearVideo,
+  onDeleteVideo,
+  onSaveVideoLabel,
   onDelete,
 }: ExerciseRowProps) {
   const cat = exercise.category as MobilityCategory;
   const showSetsReps = cat === 'exercise';
+  const isRotational = cat === 'exercise';
+  const orderLabel = isRotational
+    ? currentDay
+      ? exercise.orderByDay[currentDay] ?? '?'
+      : '?'
+    : exercise.orderInDay;
 
   return (
     <div className="card p-4 relative overflow-hidden">
       <div className="flex flex-col md:flex-row md:items-start gap-4">
         <div className="flex-1 min-w-0 space-y-2">
           <div className="flex items-center justify-between gap-2 text-xs text-surface-500">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2 py-0.5 rounded bg-surface-800 border border-surface-700">
-                #{exercise.orderInDay}
+                #{orderLabel}
               </span>
               <span>{CATEGORY_LABELS[cat] ?? exercise.category}</span>
-              {isDailyCategory(cat) && (
+              {!isRotational && (
                 <span className="text-rainbow-teal">· daily</span>
+              )}
+              {isRotational && (
+                <div className="flex items-center gap-1">
+                  {DAYS.map((d) => {
+                    const on = exercise.days.includes(d);
+                    return (
+                      <button
+                        key={d}
+                        onClick={() => onToggleDay(d)}
+                        title={on ? `Remove from Day ${d}` : `Add to Day ${d}`}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-colors ${
+                          on
+                            ? 'bg-rainbow-cyan/15 border-rainbow-cyan/50 text-rainbow-cyan'
+                            : 'bg-surface-800 border-surface-700 text-surface-500 hover:border-surface-600'
+                        }`}
+                      >
+                        D{d}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
             <button
@@ -391,7 +550,7 @@ function ExerciseRow({
             defaultValue={exercise.name}
             onBlur={(e) => {
               const v = e.currentTarget.value.trim();
-              if (v && v !== exercise.name) onSaveField('name', v);
+              if (v && v !== exercise.name) onSaveTextField('name', v);
             }}
             className="w-full bg-surface-800 border border-surface-700 rounded-md px-3 py-2 text-surface-100 text-sm focus:outline-none focus:border-rainbow-cyan/50"
           />
@@ -403,7 +562,7 @@ function ExerciseRow({
               onBlur={(e) => {
                 const v = e.currentTarget.value.trim();
                 const next = v === '' ? null : v;
-                if (next !== (exercise.setsReps ?? null)) onSaveField('setsReps', next);
+                if (next !== (exercise.setsReps ?? null)) onSaveTextField('setsReps', next);
               }}
               className="w-32 bg-surface-800 border border-surface-700 rounded-md px-3 py-2 text-surface-100 text-xs focus:outline-none focus:border-rainbow-cyan/50"
             />
@@ -416,40 +575,17 @@ function ExerciseRow({
             onBlur={(e) => {
               const v = e.currentTarget.value.trim();
               const next = v === '' ? null : v;
-              if (next !== (exercise.notes ?? null)) onSaveField('notes', next);
+              if (next !== (exercise.notes ?? null)) onSaveTextField('notes', next);
             }}
             className="w-full bg-surface-800 border border-surface-700 rounded-md px-3 py-2 text-surface-100 text-xs focus:outline-none focus:border-rainbow-cyan/50 resize-none"
           />
         </div>
 
-        <div className="md:w-64 flex-shrink-0 space-y-2">
-          {exercise.videoUrl ? (
-            <>
-              <video
-                src={exercise.videoUrl}
-                controls
-                playsInline
-                className="w-full rounded-md bg-black aspect-video object-contain"
-              />
-              <div className="flex gap-2">
-                <UploadButton
-                  label="Replace"
-                  uploading={state.uploading}
-                  progress={state.uploadProgress}
-                  onFile={onUpload}
-                />
-                <button
-                  onClick={onClearVideo}
-                  className="text-xs text-surface-500 hover:text-red-400 transition-colors px-2"
-                >
-                  Remove
-                </button>
-              </div>
-            </>
-          ) : (
+        <div className="md:w-72 flex-shrink-0 space-y-3">
+          {exercise.videos.length === 0 ? (
             <div className="space-y-2">
               <div className="aspect-video w-full rounded-md bg-surface-800/50 border border-dashed border-surface-700 flex items-center justify-center text-xs text-surface-600">
-                No video uploaded
+                No videos uploaded
               </div>
               <UploadButton
                 label="Upload video"
@@ -458,28 +594,69 @@ function ExerciseRow({
                 onFile={onUpload}
               />
             </div>
+          ) : (
+            <div className="space-y-3">
+              {exercise.videos.map((v, idx) => (
+                <VideoRow
+                  key={v.id}
+                  index={idx}
+                  video={v}
+                  onDelete={() => onDeleteVideo(v.id)}
+                  onSaveLabel={(label) => onSaveVideoLabel(v.id, label)}
+                />
+              ))}
+              <UploadButton
+                label="+ Add another video"
+                uploading={state.uploading}
+                progress={state.uploadProgress}
+                onFile={onUpload}
+              />
+            </div>
           )}
-
-          <details className="text-xs">
-            <summary className="text-surface-500 hover:text-surface-300 cursor-pointer">
-              Or paste a URL
-            </summary>
-            <input
-              defaultValue={exercise.videoUrl ?? ''}
-              placeholder="https://..."
-              onBlur={(e) => {
-                const v = e.currentTarget.value.trim();
-                const next = v === '' ? null : v;
-                if (next !== (exercise.videoUrl ?? null)) onSaveField('videoUrl', next);
-              }}
-              className="w-full mt-2 bg-surface-800 border border-surface-700 rounded-md px-2 py-1.5 text-surface-100 focus:outline-none focus:border-rainbow-cyan/50"
-            />
-          </details>
         </div>
       </div>
 
       {state.error && <div className="mt-2 text-xs text-red-400">{state.error}</div>}
       {state.saving && <div className="mt-2 text-xs text-surface-500">Saving…</div>}
+    </div>
+  );
+}
+
+interface VideoRowProps {
+  index: number;
+  video: ExerciseVideoEntry;
+  onDelete: () => void;
+  onSaveLabel: (label: string | null) => void;
+}
+
+function VideoRow({ index, video, onDelete, onSaveLabel }: VideoRowProps) {
+  return (
+    <div className="space-y-1.5">
+      <video
+        src={video.url}
+        controls
+        playsInline
+        className="w-full rounded-md bg-black aspect-video object-contain"
+      />
+      <div className="flex items-center gap-2">
+        <input
+          defaultValue={video.label ?? ''}
+          placeholder={`Video ${index + 1} label (optional)`}
+          onBlur={(e) => {
+            const v = e.currentTarget.value.trim();
+            const next = v === '' ? null : v;
+            if (next !== (video.label ?? null)) onSaveLabel(next);
+          }}
+          className="flex-1 bg-surface-800 border border-surface-700 rounded-md px-2 py-1.5 text-surface-100 text-xs focus:outline-none focus:border-rainbow-cyan/50"
+        />
+        <button
+          onClick={onDelete}
+          className="text-xs text-surface-500 hover:text-red-400 transition-colors px-2 py-1.5"
+          title="Remove video"
+        >
+          ✕
+        </button>
+      </div>
     </div>
   );
 }
