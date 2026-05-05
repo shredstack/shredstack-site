@@ -261,6 +261,52 @@ export const dailyMoversSessions = pgTable('daily_movers_sessions', {
     .on(table.userId, table.loggedDate),
 ]);
 
+// ============================================================
+// MOBILITY TRACKER
+// ============================================================
+
+export const mobilityExercises = pgTable('mobility_exercises', {
+  id: serial('id').primaryKey(),
+  day: integer('day'),
+  // 1, 2, 3 for day-rotational exercises; NULL for non-rotational items (stretches, recovery)
+  orderInDay: integer('order_in_day').notNull(),
+  category: varchar('category', { length: 32 }).notNull(),
+  // 'exercise' | 'stretch' | 'recovery_at_athlecare'
+  name: varchar('name', { length: 255 }).notNull(),
+  setsReps: varchar('sets_reps', { length: 64 }),
+  videoUrl: text('video_url'),
+  videoFilename: varchar('video_filename', { length: 255 }),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index('mobility_exercises_day_order_idx').on(table.day, table.orderInDay),
+]);
+
+export const mobilitySessions = pgTable('mobility_sessions', {
+  id: serial('id').primaryKey(),
+  day: integer('day').notNull(),
+  sessionDate: date('session_date').notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+}, (table) => [
+  index('mobility_sessions_session_date_idx').on(table.sessionDate),
+]);
+
+export const mobilityCompletions = pgTable('mobility_completions', {
+  id: serial('id').primaryKey(),
+  sessionId: integer('session_id')
+    .references(() => mobilitySessions.id, { onDelete: 'cascade' })
+    .notNull(),
+  exerciseId: integer('exercise_id')
+    .references(() => mobilityExercises.id, { onDelete: 'cascade' })
+    .notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('mobility_completions_session_exercise_idx')
+    .on(table.sessionId, table.exerciseId),
+]);
+
 // Type exports for use in application code
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type NewBlogPost = typeof blogPosts.$inferInsert;
@@ -280,3 +326,9 @@ export type HyroxSessionLog = typeof hyroxSessionLogs.$inferSelect;
 export type HyroxStationBenchmark = typeof hyroxStationBenchmarks.$inferSelect;
 export type DailyMoversSession = typeof dailyMoversSessions.$inferSelect;
 export type NewDailyMoversSession = typeof dailyMoversSessions.$inferInsert;
+export type MobilityExercise = typeof mobilityExercises.$inferSelect;
+export type NewMobilityExercise = typeof mobilityExercises.$inferInsert;
+export type MobilitySession = typeof mobilitySessions.$inferSelect;
+export type NewMobilitySession = typeof mobilitySessions.$inferInsert;
+export type MobilityCompletion = typeof mobilityCompletions.$inferSelect;
+export type NewMobilityCompletion = typeof mobilityCompletions.$inferInsert;
