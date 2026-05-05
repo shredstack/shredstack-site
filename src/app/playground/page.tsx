@@ -39,6 +39,14 @@ const liveExperiments = [
     gradient: "from-rainbow-cyan to-rainbow-purple",
     href: "/playground/daily-movers",
   },
+  {
+    name: "Mobility Tracker",
+    description:
+      "Run my Athlecare 3-day mobility program with video demos and per-exercise checkoff. Auto-rotates Day 1 → 2 → 3.",
+    icon: "\u{1F9D8}‍♀️",
+    gradient: "from-rainbow-teal to-rainbow-cyan",
+    href: "/playground/mobility",
+  },
 ];
 
 const upcomingExperiments = [

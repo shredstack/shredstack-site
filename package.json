@@ -18,6 +18,7 @@
     "@neondatabase/serverless": "^1.0.2",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.39.0",
+    "@vercel/blob": "^2.3.3",
     "drizzle-orm": "^0.45.1",
     "jose": "^6.2.2",
     "next": "^15.0.0",
