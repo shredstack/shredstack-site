@@ -1,4 +1,82 @@
+import type {
+  MobilityExercise,
+  MobilityExerciseDay,
+  MobilityExerciseVideo,
+} from '@/db/schema';
+
 export type MobilityCategory = 'exercise' | 'stretch' | 'recovery_at_athlecare';
+
+// What the client sees: a base exercise plus its joined day assignments and videos.
+export interface ExerciseVideoEntry {
+  id: number;
+  url: string;
+  filename: string | null;
+  label: string | null;
+  sortOrder: number;
+}
+
+export interface ExerciseWithRelations extends MobilityExercise {
+  // Days the exercise appears on. [] for stretch/recovery_at_athlecare items (they appear every day).
+  // Sorted ascending.
+  days: number[];
+  // Per-day order map (day -> orderInDay) for rotational exercises. Empty for non-rotational.
+  orderByDay: Record<number, number>;
+  videos: ExerciseVideoEntry[];
+}
+
+// Build the joined client shape from the three raw rowsets.
+// Sort: videos by (sortOrder asc, id asc); days by ascending integer.
+export function hydrateExercises(
+  exercises: MobilityExercise[],
+  dayLinks: MobilityExerciseDay[],
+  videos: MobilityExerciseVideo[],
+): ExerciseWithRelations[] {
+  const dayMap = new Map<number, MobilityExerciseDay[]>();
+  for (const link of dayLinks) {
+    const list = dayMap.get(link.exerciseId) ?? [];
+    list.push(link);
+    dayMap.set(link.exerciseId, list);
+  }
+  const videoMap = new Map<number, ExerciseVideoEntry[]>();
+  for (const v of videos) {
+    const list = videoMap.get(v.exerciseId) ?? [];
+    list.push({
+      id: v.id,
+      url: v.url,
+      filename: v.filename,
+      label: v.label,
+      sortOrder: v.sortOrder,
+    });
+    videoMap.set(v.exerciseId, list);
+  }
+  return exercises.map((ex) => {
+    const links = (dayMap.get(ex.id) ?? []).slice().sort((a, b) => a.day - b.day);
+    const orderByDay: Record<number, number> = {};
+    for (const link of links) orderByDay[link.day] = link.orderInDay;
+    const exerciseVideos = (videoMap.get(ex.id) ?? []).slice().sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return a.id - b.id;
+    });
+    return {
+      ...ex,
+      days: links.map((l) => l.day),
+      orderByDay,
+      videos: exerciseVideos,
+    };
+  });
+}
+
+// Validate a days[] array for a rotational exercise.
+export function normalizeDaysArray(value: unknown): number[] | null {
+  if (!Array.isArray(value)) return null;
+  const set = new Set<number>();
+  for (const v of value) {
+    if (v !== 1 && v !== 2 && v !== 3) return null;
+    set.add(v);
+  }
+  if (set.size === 0) return null;
+  return [...set].sort((a, b) => a - b);
+}
 
 export const CATEGORY_LABELS: Record<MobilityCategory, string> = {
   exercise: 'Exercises',

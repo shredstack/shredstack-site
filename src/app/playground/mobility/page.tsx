@@ -1,16 +1,24 @@
 import { db } from '@/db';
-import { mobilityExercises, mobilitySessions, mobilityCompletions } from '@/db/schema';
+import {
+  mobilityExercises,
+  mobilityExerciseDays,
+  mobilityExerciseVideos,
+  mobilitySessions,
+  mobilityCompletions,
+} from '@/db/schema';
 import { asc, desc, isNotNull, isNull, eq } from 'drizzle-orm';
-import { nextDay } from '@/lib/mobility/program';
+import { hydrateExercises, nextDay } from '@/lib/mobility/program';
 import MobilityClient from './components/MobilityClient';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MobilityPage() {
-  const exercises = await db
-    .select()
-    .from(mobilityExercises)
-    .orderBy(asc(mobilityExercises.day), asc(mobilityExercises.orderInDay));
+  const [exerciseRows, dayRows, videoRows] = await Promise.all([
+    db.select().from(mobilityExercises).orderBy(asc(mobilityExercises.id)),
+    db.select().from(mobilityExerciseDays),
+    db.select().from(mobilityExerciseVideos),
+  ]);
+  const exercises = hydrateExercises(exerciseRows, dayRows, videoRows);
 
   const [activeSession] = await db
     .select()

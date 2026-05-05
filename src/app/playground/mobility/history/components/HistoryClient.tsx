@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import type { MobilityCompletion, MobilityExercise, MobilitySession } from '@/db/schema';
+import type { MobilityCompletion, MobilitySession } from '@/db/schema';
+import type { ExerciseWithRelations } from '@/lib/mobility/program';
 
 interface Props {
   sessions: MobilitySession[];
-  exercises: MobilityExercise[];
+  exercises: ExerciseWithRelations[];
   completions: MobilityCompletion[];
 }
 
@@ -17,13 +18,15 @@ const DAYS_TO_SHOW = 60;
 export default function HistoryClient({ sessions, exercises, completions }: Props) {
   const [expandedSessionId, setExpandedSessionId] = useState<number | null>(null);
 
-  // Items grouped by day. Day-rotational items appear under their day; non-rotational
-  // (day === null) items appear on every session day.
+  // Items grouped by day. Rotational exercises appear on every day they're assigned to;
+  // non-rotational items (stretches, recovery) appear on every session day.
   const exercisesForDay = useMemo(() => {
-    const map = new Map<number, MobilityExercise[]>();
-    const dailyItems = exercises.filter((ex) => ex.day === null);
+    const map = new Map<number, ExerciseWithRelations[]>();
+    const dailyItems = exercises.filter((ex) => ex.category !== 'exercise');
     for (const day of [1, 2, 3]) {
-      const dayItems = exercises.filter((ex) => ex.day === day);
+      const dayItems = exercises.filter(
+        (ex) => ex.category === 'exercise' && ex.days.includes(day),
+      );
       map.set(day, [...dayItems, ...dailyItems]);
     }
     return map;

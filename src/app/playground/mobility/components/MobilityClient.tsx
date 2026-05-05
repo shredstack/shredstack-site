@@ -3,18 +3,19 @@
 import Link from 'next/link';
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import type { MobilityExercise, MobilitySession } from '@/db/schema';
+import type { MobilitySession } from '@/db/schema';
 import {
   CATEGORY_HINT,
   CATEGORY_LABELS,
   CATEGORY_ORDER,
   isValidDay,
+  type ExerciseWithRelations,
   type MobilityCategory,
   type MobilityDay,
 } from '@/lib/mobility/program';
 
 interface Props {
-  exercises: MobilityExercise[];
+  exercises: ExerciseWithRelations[];
   initialActiveSession: MobilitySession | null;
   initialCompletedExerciseIds: number[];
   suggestedDay: number;
@@ -40,26 +41,39 @@ export default function MobilityClient({
   const [openSections, setOpenSections] = useState<Set<MobilityCategory>>(
     new Set(['exercise', 'stretch']),
   );
-  const [expandedVideo, setExpandedVideo] = useState<number | null>(null);
+  const [expandedVideoExerciseId, setExpandedVideoExerciseId] = useState<number | null>(null);
+  const [activeVideoIndex, setActiveVideoIndex] = useState<Record<number, number>>({});
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  // If user picks a day that doesn't match the active session, hide checked state.
-  // (Switching days mid-session is gated below.)
   const dayLocked = activeSession ? activeSession.day : null;
 
   const exercisesByDay = useMemo(() => {
-    const groups: Record<MobilityCategory, MobilityExercise[]> = {
+    const groups: Record<MobilityCategory, ExerciseWithRelations[]> = {
       exercise: [],
       stretch: [],
       recovery_at_athlecare: [],
     };
     for (const ex of exercises) {
-      // Day-rotational items only show on their day; null-day items show on every session.
-      if (ex.day !== null && ex.day !== selectedDay) continue;
       const cat = ex.category as MobilityCategory;
-      if (groups[cat]) groups[cat].push(ex);
+      if (!groups[cat]) continue;
+      if (cat === 'exercise') {
+        // Rotational items only show on days they're assigned to.
+        if (!ex.days.includes(selectedDay)) continue;
+      }
+      groups[cat].push(ex);
     }
+    // Sort: rotational items by their per-day orderInDay; non-rotational by orderInDay.
+    groups.exercise.sort((a, b) => {
+      const ao = a.orderByDay[selectedDay] ?? Number.MAX_SAFE_INTEGER;
+      const bo = b.orderByDay[selectedDay] ?? Number.MAX_SAFE_INTEGER;
+      if (ao !== bo) return ao - bo;
+      return a.id - b.id;
+    });
+    groups.stretch.sort((a, b) => a.orderInDay - b.orderInDay || a.id - b.id);
+    groups.recovery_at_athlecare.sort(
+      (a, b) => a.orderInDay - b.orderInDay || a.id - b.id,
+    );
     return groups;
   }, [exercises, selectedDay]);
 
@@ -284,7 +298,13 @@ export default function MobilityClient({
                   <ul className="border-t border-surface-700/60">
                     {items.map((ex) => {
                       const isDone = completed.has(ex.id);
-                      const isVideoOpen = expandedVideo === ex.id;
+                      const isVideoOpen = expandedVideoExerciseId === ex.id;
+                      const hasVideos = ex.videos.length > 0;
+                      const activeIdx = Math.min(
+                        activeVideoIndex[ex.id] ?? 0,
+                        Math.max(0, ex.videos.length - 1),
+                      );
+                      const activeVideo = hasVideos ? ex.videos[activeIdx] : null;
                       return (
                         <li
                           key={ex.id}
@@ -333,16 +353,21 @@ export default function MobilityClient({
                                     {ex.setsReps}
                                   </span>
                                 )}
+                                {ex.videos.length > 1 && (
+                                  <span className="text-xs px-2 py-0.5 rounded bg-rainbow-cyan/10 text-rainbow-cyan border border-rainbow-cyan/30">
+                                    {ex.videos.length} videos
+                                  </span>
+                                )}
                               </div>
                               {ex.notes && (
                                 <p className="text-xs text-surface-500 mt-1">{ex.notes}</p>
                               )}
                             </div>
 
-                            {ex.videoUrl ? (
+                            {hasVideos ? (
                               <button
                                 onClick={() =>
-                                  setExpandedVideo(isVideoOpen ? null : ex.id)
+                                  setExpandedVideoExerciseId(isVideoOpen ? null : ex.id)
                                 }
                                 className="flex-shrink-0 w-14 h-14 rounded-md bg-surface-800 border border-surface-700 hover:border-rainbow-cyan/50 transition-colors flex items-center justify-center text-rainbow-cyan"
                                 aria-label={isVideoOpen ? 'Hide video' : 'Show video'}
@@ -356,14 +381,40 @@ export default function MobilityClient({
                             )}
                           </div>
 
-                          {isVideoOpen && ex.videoUrl && (
-                            <div className="px-4 pb-4">
+                          {isVideoOpen && activeVideo && (
+                            <div className="px-4 pb-4 space-y-2">
                               <video
-                                src={ex.videoUrl}
+                                key={activeVideo.id}
+                                src={activeVideo.url}
                                 controls
                                 playsInline
                                 className="w-full max-h-[70vh] rounded-md bg-black"
                               />
+                              {ex.videos.length > 1 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {ex.videos.map((v, idx) => {
+                                    const isActive = idx === activeIdx;
+                                    return (
+                                      <button
+                                        key={v.id}
+                                        onClick={() =>
+                                          setActiveVideoIndex((prev) => ({
+                                            ...prev,
+                                            [ex.id]: idx,
+                                          }))
+                                        }
+                                        className={`text-xs px-2.5 py-1 rounded-md border transition-colors ${
+                                          isActive
+                                            ? 'bg-rainbow-cyan/15 border-rainbow-cyan/50 text-rainbow-cyan'
+                                            : 'bg-surface-800/40 border-surface-700 text-surface-400 hover:border-surface-600'
+                                        }`}
+                                      >
+                                        {v.label?.trim() || `Video ${idx + 1}`}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           )}
                         </li>

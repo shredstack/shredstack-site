@@ -267,20 +267,44 @@ export const dailyMoversSessions = pgTable('daily_movers_sessions', {
 
 export const mobilityExercises = pgTable('mobility_exercises', {
   id: serial('id').primaryKey(),
-  day: integer('day'),
-  // 1, 2, 3 for day-rotational exercises; NULL for non-rotational items (stretches, recovery)
+  // For non-rotational items (stretch, recovery_at_athlecare): order within their category section.
+  // For rotational items (category='exercise'): unused at runtime — per-day order lives in mobility_exercise_days.
   orderInDay: integer('order_in_day').notNull(),
   category: varchar('category', { length: 32 }).notNull(),
   // 'exercise' | 'stretch' | 'recovery_at_athlecare'
   name: varchar('name', { length: 255 }).notNull(),
   setsReps: varchar('sets_reps', { length: 64 }),
-  videoUrl: text('video_url'),
-  videoFilename: varchar('video_filename', { length: 255 }),
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// Join table: which days a rotational exercise appears on, and its per-day ordering.
+// Only used for category='exercise'; stretch/recovery items appear every day and don't have rows here.
+export const mobilityExerciseDays = pgTable('mobility_exercise_days', {
+  id: serial('id').primaryKey(),
+  exerciseId: integer('exercise_id')
+    .references(() => mobilityExercises.id, { onDelete: 'cascade' })
+    .notNull(),
+  day: integer('day').notNull(), // 1, 2, or 3
+  orderInDay: integer('order_in_day').notNull(),
 }, (table) => [
-  index('mobility_exercises_day_order_idx').on(table.day, table.orderInDay),
+  uniqueIndex('mobility_exercise_days_exercise_day_idx').on(table.exerciseId, table.day),
+  index('mobility_exercise_days_day_order_idx').on(table.day, table.orderInDay),
+]);
+
+export const mobilityExerciseVideos = pgTable('mobility_exercise_videos', {
+  id: serial('id').primaryKey(),
+  exerciseId: integer('exercise_id')
+    .references(() => mobilityExercises.id, { onDelete: 'cascade' })
+    .notNull(),
+  url: text('url').notNull(),
+  filename: varchar('filename', { length: 255 }),
+  label: varchar('label', { length: 100 }),
+  sortOrder: integer('sort_order').default(0).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('mobility_exercise_videos_exercise_idx').on(table.exerciseId, table.sortOrder),
 ]);
 
 export const mobilitySessions = pgTable('mobility_sessions', {
@@ -328,6 +352,10 @@ export type DailyMoversSession = typeof dailyMoversSessions.$inferSelect;
 export type NewDailyMoversSession = typeof dailyMoversSessions.$inferInsert;
 export type MobilityExercise = typeof mobilityExercises.$inferSelect;
 export type NewMobilityExercise = typeof mobilityExercises.$inferInsert;
+export type MobilityExerciseDay = typeof mobilityExerciseDays.$inferSelect;
+export type NewMobilityExerciseDay = typeof mobilityExerciseDays.$inferInsert;
+export type MobilityExerciseVideo = typeof mobilityExerciseVideos.$inferSelect;
+export type NewMobilityExerciseVideo = typeof mobilityExerciseVideos.$inferInsert;
 export type MobilitySession = typeof mobilitySessions.$inferSelect;
 export type NewMobilitySession = typeof mobilitySessions.$inferInsert;
 export type MobilityCompletion = typeof mobilityCompletions.$inferSelect;
