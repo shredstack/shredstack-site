@@ -147,6 +147,21 @@ export const projects: Project[] = [
     githubUrl: "https://github.com/shredstack/trip-craft",
     liveUrl: "https://trip-craft.shredstack.net",
   },
+  {
+    id: "shred-track",
+    name: "ShredTrack",
+    description:
+      "Mobile-first training platform for CrossFit and HYROX athletes. Pairs everyday workout logging with AI-generated training plans, personalized performance insights, race prediction, and structured recovery — solving the fragmented, insight-poor experience that comes standard with most affiliate gym apps.",
+    longDescription:
+      "Built for the modern hybrid athlete — the person who does CrossFit five days a week, races HYROX twice a year, and knows recovery isn't optional. Replaces the patchwork of spreadsheets, gym whiteboards, and shallow tracker apps with one place to log every session and actually learn from it. Turns daily score data into personalized insights: predicted 1RMs, RX-vs-scaled gap analysis, domain profiles (where you're strong, where you're soft), benchmark trends, and AI-extracted patterns from your own training notes. For HYROX athletes, it generates fully periodized training plans, predicts finish times against the global field using a model trained on real race data, and writes AI race reports after every practice race. Affiliate gyms get a community layer with shared programming, leaderboards, and recovery adherence — so coaches and athletes finally see the same picture.",
+    techStack: ["Next.js 15", "TypeScript", "Tailwind CSS", "Drizzle ORM", "Supabase", "Anthropic API", "Capacitor"],
+    category: "personal",
+    featured: true,
+    status: "Active",
+    gradient: "from-rainbow-orange to-rainbow-red",
+    githubUrl: "https://github.com/shredstack/shred-track",
+    liveUrl: "https://shredtrack.shredstack.net",
+  },
 
   // Professional Work
   {
