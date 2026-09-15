@@ -331,6 +331,24 @@ export const mobilityCompletions = pgTable('mobility_completions', {
     .on(table.sessionId, table.exerciseId),
 ]);
 
+// ============================================================
+// HYROX CHEER CARD (spectator-facing live race tracker)
+// ============================================================
+
+export const hyroxCheerMarks = pgTable('hyrox_cheer_marks', {
+  id: serial('id').primaryKey(),
+  raceSlug: varchar('race_slug', { length: 100 }).notNull(),
+  segmentIndex: integer('segment_index').notNull(),
+  // absolute instant the segment was marked complete; displayed clock time is
+  // derived from this via Intl.DateTimeFormat in the race's timeZone, so it
+  // reads correctly for spectators in any timezone
+  markedAt: timestamp('marked_at', { withTimezone: true }),
+  note: text('note'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('hyrox_cheer_marks_race_segment_idx').on(table.raceSlug, table.segmentIndex),
+]);
+
 // Type exports for use in application code
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type NewBlogPost = typeof blogPosts.$inferInsert;
@@ -360,3 +378,5 @@ export type MobilitySession = typeof mobilitySessions.$inferSelect;
 export type NewMobilitySession = typeof mobilitySessions.$inferInsert;
 export type MobilityCompletion = typeof mobilityCompletions.$inferSelect;
 export type NewMobilityCompletion = typeof mobilityCompletions.$inferInsert;
+export type HyroxCheerMark = typeof hyroxCheerMarks.$inferSelect;
+export type NewHyroxCheerMark = typeof hyroxCheerMarks.$inferInsert;

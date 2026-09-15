@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Fira_Code } from "next/font/google";
 import "./globals.css";
-import { Navigation } from "@/components/Navigation";
-import { Footer } from "@/components/Footer";
+import { ConditionalChrome } from "@/components/ConditionalChrome";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -43,9 +42,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${firaCode.variable}`}>
       <body className="min-h-screen flex flex-col font-sans">
-        <Navigation />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        <ConditionalChrome>{children}</ConditionalChrome>
       </body>
     </html>
   );

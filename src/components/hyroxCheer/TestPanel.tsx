@@ -1,0 +1,117 @@
+'use client';
+
+import { useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import styles from './cheer.module.css';
+import type { RaceConfig } from '@/lib/hyroxCheer/races/slc2026';
+
+interface TestPanelProps {
+  race: RaceConfig;
+  startInstant: Date;
+  totalGoldSeconds: number;
+  totalTealSeconds: number;
+  midpointGoldSeconds: number;
+  midpointTealSeconds: number;
+}
+
+function toDatetimeLocalValue(date: Date): string {
+  const pad = (n: number) => `${n}`.padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
+
+export function TestPanel({
+  race,
+  startInstant,
+  totalGoldSeconds,
+  totalTealSeconds,
+  midpointGoldSeconds,
+  midpointTealSeconds,
+}: TestPanelProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [open, setOpen] = useState(true);
+
+  function setParams(next: Record<string, string | null>) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(next)) {
+      if (value === null) params.delete(key);
+      else params.set(key, value);
+    }
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
+  const jumps: { label: string; getNow: () => Date }[] = [
+    { label: 'Before start', getNow: () => new Date(startInstant.getTime() - 90 * 60 * 1000) },
+    { label: 'At the gun', getNow: () => new Date(startInstant.getTime()) },
+    {
+      label: 'Mid-race',
+      getNow: () => new Date(startInstant.getTime() + (midpointGoldSeconds + 5) * 1000),
+    },
+    {
+      label: 'Past the teal line',
+      getNow: () => new Date(startInstant.getTime() + (midpointTealSeconds + 60) * 1000),
+    },
+    {
+      label: 'Finished',
+      getNow: () => new Date(startInstant.getTime() + (totalTealSeconds + 600) * 1000),
+    },
+  ];
+
+  return (
+    <div className={styles.testPanel}>
+      <div className={styles.testPanelHeader} onClick={() => setOpen((o) => !o)}>
+        <span>Testing (unlocked)</span>
+        <span>{open ? '−' : '+'}</span>
+      </div>
+      {open && (
+        <div className={styles.testPanelBody}>
+          <label>
+            Start override
+            <input
+              type="datetime-local"
+              defaultValue={toDatetimeLocalValue(startInstant)}
+              onChange={(e) => {
+                if (!e.target.value) return;
+                const d = new Date(e.target.value);
+                if (!Number.isNaN(d.getTime())) setParams({ start: d.toISOString() });
+              }}
+            />
+          </label>
+          <label>
+            Simulated now
+            <input
+              type="datetime-local"
+              defaultValue={toDatetimeLocalValue(new Date())}
+              onChange={(e) => {
+                if (!e.target.value) return;
+                const d = new Date(e.target.value);
+                if (!Number.isNaN(d.getTime())) setParams({ now: d.toISOString() });
+              }}
+            />
+          </label>
+          <div className={styles.testJumps}>
+            {jumps.map((jump) => (
+              <button
+                key={jump.label}
+                type="button"
+                onClick={() => setParams({ now: jump.getNow().toISOString() })}
+              >
+                {jump.label}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={() => setParams({ start: null, now: null })}>
+            Reset overrides
+          </button>
+          <div style={{ fontSize: '0.68rem' }}>
+            Race slug: {race.slug} &middot; real start {race.startISO}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

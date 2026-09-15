@@ -1,0 +1,413 @@
+/* Ported verbatim (selectors rescoped to classes) from the original cheer card
+   mockup. Do not redesign — this is the reference implementation's design. */
+
+.page {
+  --gold: #e9a13c;
+  --teal: #1d7e96;
+  --ketch: #ce3a2c;
+  --ink: #2e2622;
+  --paper: #fcfaf5;
+  --mut: #7c7268;
+  --card: #fff;
+  --line: #e5ddce;
+  --chipg: #fbe9ce;
+  --chipt: #d9ebf1;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.4;
+  padding: 0 0 3rem;
+  max-width: 34rem;
+  margin: 0 auto;
+}
+
+@media (prefers-color-scheme: dark) {
+  .page:not([data-theme="light"]) {
+    --ink: #f3ede2;
+    --paper: #191512;
+    --card: #231d18;
+    --line: #3a312a;
+    --mut: #a89b8c;
+    --chipg: #4a3413;
+    --chipt: #12333d;
+    --gold: #f0b65a;
+    --teal: #4fb2ce;
+  }
+}
+.page[data-theme="dark"] {
+  --ink: #f3ede2;
+  --paper: #191512;
+  --card: #231d18;
+  --line: #3a312a;
+  --mut: #a89b8c;
+  --chipg: #4a3413;
+  --chipt: #12333d;
+  --gold: #f0b65a;
+  --teal: #4fb2ce;
+}
+
+.page * {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+.page img,
+.page svg {
+  max-width: 100%;
+}
+
+.header {
+  padding: 1.1rem 1rem 0.8rem;
+  border-bottom: 3px solid var(--ink);
+}
+.plate {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+.plate svg {
+  flex: 0 0 auto;
+}
+.pre {
+  color: var(--ketch);
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+.h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: 0;
+}
+.eventLine {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--mut);
+}
+.eventLine b {
+  color: var(--ink);
+}
+
+.status {
+  margin: 0.85rem 1rem 0;
+  padding: 0.8rem 0.9rem;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.statusMain {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.statusSub {
+  font-size: 0.8rem;
+  color: var(--mut);
+  margin-top: 0.18rem;
+}
+.statusClock {
+  font-variant-numeric: tabular-nums;
+}
+
+.key {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.8rem 1rem 0.2rem;
+  font-size: 0.76rem;
+  color: var(--mut);
+}
+.keyItem {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0.4rem 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px 16px 4px 16px;
+  padding: 0.8rem 0.85rem;
+  position: relative;
+}
+.cardNow {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold);
+}
+.top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.icon {
+  flex: 0 0 1.7rem;
+  display: flex;
+}
+.name b {
+  display: block;
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.name small {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--mut);
+  margin-top: 0.05rem;
+}
+
+.targets {
+  display: flex;
+  gap: 0.45rem;
+  margin-top: 0.6rem;
+}
+.chip {
+  flex: 1;
+  padding: 0.4rem 0.5rem;
+  border-radius: 10px 10px 3px 10px;
+  text-align: center;
+}
+.chipGold {
+  background: var(--chipg);
+}
+.chipTeal {
+  background: var(--chipt);
+}
+.chip i {
+  display: block;
+  font-style: normal;
+  font-size: 0.63rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mut);
+}
+.chip b {
+  display: block;
+  font-size: 1.02rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.05rem;
+}
+.chip u {
+  display: block;
+  text-decoration: none;
+  font-size: 0.66rem;
+  color: var(--mut);
+  font-variant-numeric: tabular-nums;
+}
+
+.yell {
+  margin-top: 0.6rem;
+  font-size: 0.88rem;
+}
+
+.log {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+  align-items: stretch;
+}
+.markBtn {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 10px 10px 3px 10px;
+  background: var(--ink);
+  color: var(--paper);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  min-height: 44px;
+}
+.markBtn:active {
+  transform: translateY(1px);
+}
+.markBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.atInput {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px 10px 3px 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.5rem;
+  font-variant-numeric: tabular-nums;
+  min-height: 44px;
+}
+.clearBtn {
+  flex: 0 0 2.6rem;
+  border: 1px solid var(--line);
+  border-radius: 10px 10px 3px 10px;
+  background: transparent;
+  color: var(--mut);
+  font: inherit;
+  font-size: 1.1rem;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.delta {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.4rem 0.6rem;
+  border-radius: 9px 9px 3px 9px;
+}
+.deltaAhead {
+  background: var(--chipg);
+  color: var(--ink);
+}
+.deltaOntrack {
+  background: var(--chipt);
+  color: var(--ink);
+}
+.deltaBehind {
+  background: transparent;
+  border: 1px dashed var(--line);
+  color: var(--mut);
+}
+
+.note {
+  width: 100%;
+  margin-top: 0.5rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.1rem;
+}
+.note::placeholder {
+  color: var(--mut);
+}
+.atInput:focus,
+.note:focus,
+.markBtn:focus-visible,
+.clearBtn:focus-visible,
+.resetBtn:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.footer {
+  padding: 1.2rem 1rem 0;
+  font-size: 0.78rem;
+  color: var(--mut);
+}
+.footer b {
+  color: var(--ink);
+}
+.footer p + p {
+  margin-top: 0.6rem;
+}
+.fine {
+  font-size: 0.72rem;
+}
+.resetBtn {
+  margin-top: 1rem;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--mut);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.5rem 0.8rem;
+  border-radius: 10px 10px 3px 10px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.rail {
+  margin-top: 1.2rem;
+  text-align: center;
+  line-height: 0;
+  opacity: 0.8;
+}
+.rail svg {
+  margin: 0 0.1rem;
+}
+
+/* Test panel — only rendered while RACE.locked is false */
+.testPanel {
+  position: fixed;
+  right: 0.75rem;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  max-width: min(90vw, 20rem);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px 12px 3px 12px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+  font-size: 0.76rem;
+  color: var(--ink);
+}
+.testPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--ketch);
+}
+.testPanelBody {
+  padding: 0 0.7rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.testPanelBody label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  color: var(--mut);
+}
+.testPanelBody input {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  padding: 0.3rem 0.4rem;
+}
+.testJumps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.testJumps button,
+.testPanelBody > button {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
