@@ -109,3 +109,27 @@ export async function POST(
 
   return NextResponse.json({ ok: true });
 }
+
+/**
+ * Wipes every mark and note for a race — this is the "start over" button behind
+ * the test panel. Gated on the same `locked` flag as the test panel itself, so
+ * once the race is locked for race day nobody visiting the shared link can
+ * clear the board out from under everyone else.
+ */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ raceSlug: string }> }
+) {
+  const { raceSlug } = await params;
+  const found = getHyroxRace(raceSlug);
+  if (!found) {
+    return NextResponse.json({ error: 'Unknown race' }, { status: 404 });
+  }
+  if (found.race.locked) {
+    return NextResponse.json({ error: 'Race is locked' }, { status: 403 });
+  }
+
+  await db.delete(hyroxCheerMarks).where(eq(hyroxCheerMarks.raceSlug, raceSlug));
+
+  return NextResponse.json({ ok: true });
+}

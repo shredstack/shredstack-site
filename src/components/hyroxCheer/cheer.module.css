@@ -228,6 +228,7 @@
 }
 .markBtn {
   flex: 0 0 auto;
+  min-width: 6.4rem;
   border: 0;
   border-radius: 10px 10px 3px 10px;
   background: var(--ink);
@@ -271,6 +272,136 @@
   min-height: 44px;
 }
 
+/* Actual split readout — same chip language as .targets, but for real times */
+.splitRow {
+  display: flex;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+}
+.splitCell {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 10px 10px 3px 10px;
+  text-align: center;
+}
+.splitCell i {
+  display: block;
+  font-style: normal;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mut);
+}
+.splitCell b {
+  display: block;
+  font-size: 1.02rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.05rem;
+}
+.splitCell u {
+  display: block;
+  text-decoration: none;
+  font-size: 0.62rem;
+  color: var(--mut);
+  font-variant-numeric: tabular-nums;
+}
+.splitGood {
+  color: var(--gold);
+}
+.splitOk {
+  color: var(--teal);
+}
+.splitOff {
+  color: var(--ketch);
+}
+.splitNote {
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--mut);
+}
+
+/* Post-race recap — every marked split in one scannable table */
+.recap {
+  margin: 1.2rem 1rem 0;
+  padding: 0.85rem 0.9rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px 16px 4px 16px;
+}
+.recapHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.recapTitle {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.copyBtn {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 0.35rem 0.7rem;
+  border-radius: 9px 9px 3px 9px;
+  cursor: pointer;
+}
+.recapScroll {
+  overflow-x: auto;
+  margin-top: 0.6rem;
+}
+.recapTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.recapTable th,
+.recapTable td {
+  padding: 0.3rem 0.35rem;
+  text-align: right;
+  white-space: nowrap;
+}
+.recapTable thead th {
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mut);
+  font-weight: 700;
+  border-bottom: 1px solid var(--line);
+}
+.recapTable tbody th {
+  text-align: left;
+  font-weight: 700;
+  white-space: normal;
+}
+.recapTable tbody tr + tr th,
+.recapTable tbody tr + tr td {
+  border-top: 1px solid var(--line);
+}
+.recapTotal {
+  margin: 0.7rem 0 0;
+  font-size: 0.82rem;
+  color: var(--mut);
+}
+.recapTotal b {
+  color: var(--ink);
+}
+.recapFine {
+  margin: 0.45rem 0 0;
+  font-size: 0.7rem;
+  color: var(--mut);
+}
+
 .delta {
   margin-top: 0.5rem;
   font-size: 0.82rem;
@@ -310,6 +441,7 @@
 .note:focus,
 .markBtn:focus-visible,
 .clearBtn:focus-visible,
+.copyBtn:focus-visible,
 .resetBtn:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 1px;
