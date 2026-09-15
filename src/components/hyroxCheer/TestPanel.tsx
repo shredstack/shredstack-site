@@ -32,7 +32,7 @@ export function TestPanel({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
 
   function setParams(next: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams.toString());

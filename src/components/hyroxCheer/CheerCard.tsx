@@ -177,7 +177,20 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
       </>
     );
   } else if (diffSec < totalTeal + 900) {
-    nextIndex = segments.findIndex((_, i) => diffSec < cumulative[i].teal);
+    // Prefer the actual marks fans have logged over the time estimate: once a
+    // segment is marked, the athlete is past it, so the gold "next up" box
+    // should sit right after the furthest segment anyone has marked so far.
+    let lastMarkedIndex = -1;
+    for (let i = 0; i < segments.length; i++) {
+      if (marks[i]?.markedAt) lastMarkedIndex = i;
+    }
+    const timeBasedIndex = segments.findIndex((_, i) => diffSec < cumulative[i].teal);
+    nextIndex =
+      lastMarkedIndex === -1
+        ? timeBasedIndex
+        : lastMarkedIndex + 1 >= segments.length
+          ? -1
+          : lastMarkedIndex + 1;
     statusMain = `Race clock ${formatMinSec(diffSec)}`;
     if (nextIndex === -1) {
       statusSub = 'She should be done. Go find her.';
