@@ -12,6 +12,8 @@ interface TestPanelProps {
   totalTealSeconds: number;
   midpointGoldSeconds: number;
   midpointTealSeconds: number;
+  /** Wipes every mark and note on the shared board. */
+  onClearMarks: () => Promise<void> | void;
 }
 
 function toDatetimeLocalValue(date: Date): string {
@@ -28,6 +30,7 @@ export function TestPanel({
   totalTealSeconds,
   midpointGoldSeconds,
   midpointTealSeconds,
+  onClearMarks,
 }: TestPanelProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -73,6 +76,7 @@ export function TestPanel({
             Start override
             <input
               type="datetime-local"
+              key={startInstant.getTime()}
               defaultValue={toDatetimeLocalValue(startInstant)}
               onChange={(e) => {
                 if (!e.target.value) return;
@@ -104,8 +108,27 @@ export function TestPanel({
               </button>
             ))}
           </div>
-          <button type="button" onClick={() => setParams({ start: null, now: null })}>
-            Reset overrides
+          <button
+            type="button"
+            onClick={async () => {
+              if (
+                !window.confirm(
+                  'Reset the clock overrides AND erase every mark and note on this board for everyone. Continue?'
+                )
+              ) {
+                return;
+              }
+              setParams({ start: null, now: null });
+              await onClearMarks();
+            }}
+          >
+            Reset overrides &amp; clear all marks
+          </button>
+          <button
+            type="button"
+            onClick={() => setParams({ start: null, now: null })}
+          >
+            Reset clock overrides only
           </button>
           <div style={{ fontSize: '0.68rem' }}>
             Race slug: {race.slug} &middot; real start {race.startISO}

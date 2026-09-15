@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import styles from './cheer.module.css';
 import { ICONS } from './icons';
@@ -86,49 +86,93 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
 
   const [marks, setMarks] = useState<Record<number, MarkRecord>>({});
   const [noteDrafts, setNoteDrafts] = useState<Record<number, string>>({});
+  const [saving, setSaving] = useState<Record<number, boolean>>({});
   const noteTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const res = await fetch(`/api/hyrox/cheer/${race.slug}`, { cache: 'no-store' });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled) setMarks(data.marks ?? {});
-      } catch {
-        // keep whatever we last had; degrade quietly
+  // Anything typed or tapped locally is held here until the server echoes the
+  // same value back. Without this, the 5s poll can land between "Mark now" and
+  // the write finishing, and the fresh mark visibly disappears and reappears.
+  const pending = useRef<Record<number, { record: MarkRecord; at: number }>>({});
+  const PENDING_TTL_MS = 20000;
+
+  const mergeWithPending = useCallback((server: Record<number, MarkRecord>) => {
+    const merged: Record<number, MarkRecord> = { ...server };
+    const nowMs = Date.now();
+    for (const key of Object.keys(pending.current)) {
+      const i = Number(key);
+      const entry = pending.current[i];
+      const fromServer = server[i];
+      const settled =
+        fromServer !== undefined &&
+        (fromServer.markedAt ?? null) === (entry.record.markedAt ?? null) &&
+        (fromServer.note ?? null) === (entry.record.note ?? null);
+      if (settled || nowMs - entry.at > PENDING_TTL_MS) {
+        delete pending.current[i];
+        continue;
       }
+      merged[i] = entry.record;
     }
+    return merged;
+  }, []);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/hyrox/cheer/${race.slug}`, { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      setMarks(mergeWithPending(data.marks ?? {}));
+    } catch {
+      // keep whatever we last had; degrade quietly
+    }
+  }, [race.slug, mergeWithPending]);
+
+  useEffect(() => {
     load();
     const id = setInterval(load, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [race.slug]);
+    return () => clearInterval(id);
+  }, [load]);
 
-  async function postMark(segmentIndex: number, payload: { markedAt?: string | null; note?: string | null }) {
-    try {
-      await fetch(`/api/hyrox/cheer/${race.slug}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ segmentIndex, ...payload }),
-      });
-    } catch {
-      // fans will still see their own optimistic update; next poll reconciles
-    }
+  const applyLocal = useCallback((i: number, record: MarkRecord) => {
+    pending.current[i] = { record, at: Date.now() };
+    setMarks((prev) => ({ ...prev, [i]: record }));
+  }, []);
+
+  const postMark = useCallback(
+    async (segmentIndex: number, payload: { markedAt?: string | null; note?: string | null }) => {
+      setSaving((prev) => ({ ...prev, [segmentIndex]: true }));
+      try {
+        await fetch(`/api/hyrox/cheer/${race.slug}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ segmentIndex, ...payload }),
+        });
+      } catch {
+        // fans still see their own optimistic update; the next poll reconciles
+      } finally {
+        setSaving((prev) => {
+          const next = { ...prev };
+          delete next[segmentIndex];
+          return next;
+        });
+        // Don't wait up to 5s for the poll to confirm the write landed.
+        load();
+      }
+    },
+    [race.slug, load]
+  );
+
+  function setMarkedAt(i: number, iso: string | null) {
+    const record: MarkRecord = { markedAt: iso, note: marks[i]?.note ?? null };
+    applyLocal(i, record);
+    postMark(i, { markedAt: iso });
   }
 
   function markNow(i: number) {
-    const instant = now;
-    setMarks((prev) => ({ ...prev, [i]: { markedAt: instant.toISOString(), note: prev[i]?.note ?? null } }));
-    postMark(i, { markedAt: instant.toISOString() });
+    setMarkedAt(i, now.toISOString());
   }
 
   function clearAt(i: number) {
-    setMarks((prev) => ({ ...prev, [i]: { markedAt: null, note: prev[i]?.note ?? null } }));
-    postMark(i, { markedAt: null });
+    setMarkedAt(i, null);
   }
 
   function handleAtChange(i: number, value: string) {
@@ -139,18 +183,107 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     const parsed = parseTimeInputValue(value);
     if (!parsed) return;
     const { year, month, day } = getZonedDateParts(startInstant, race.timeZone);
-    const instant = zonedTimeToInstant(year, month, day, parsed.hour, parsed.minute, parsed.second, race.timeZone);
-    setMarks((prev) => ({ ...prev, [i]: { markedAt: instant.toISOString(), note: prev[i]?.note ?? null } }));
-    postMark(i, { markedAt: instant.toISOString() });
+
+    // Mobile time pickers hand back "HH:MM" even with step=1, which would
+    // silently throw away the seconds on a mark that was timed to the second.
+    // If only the seconds are missing and the minute is unchanged, keep them.
+    let second = parsed.second;
+    const existingISO = marks[i]?.markedAt;
+    if (value.split(':').length < 3 && existingISO) {
+      const existing = parseTimeInputValue(formatTimeInputValue(new Date(existingISO), race.timeZone));
+      if (existing && existing.hour === parsed.hour && existing.minute === parsed.minute) {
+        second = existing.second;
+      }
+    }
+
+    const instant = zonedTimeToInstant(year, month, day, parsed.hour, parsed.minute, second, race.timeZone);
+    setMarkedAt(i, instant.toISOString());
   }
 
   function handleNoteChange(i: number, value: string) {
     setNoteDrafts((prev) => ({ ...prev, [i]: value }));
     clearTimeout(noteTimers.current[i]);
     noteTimers.current[i] = setTimeout(() => {
-      setMarks((prev) => ({ ...prev, [i]: { markedAt: prev[i]?.markedAt ?? null, note: value } }));
+      applyLocal(i, { markedAt: marks[i]?.markedAt ?? null, note: value });
       postMark(i, { note: value });
     }, 350);
+  }
+
+  const clearAllMarks = useCallback(async () => {
+    pending.current = {};
+    setMarks({});
+    setNoteDrafts({});
+    try {
+      await fetch(`/api/hyrox/cheer/${race.slug}`, { method: 'DELETE' });
+    } catch {
+      // nothing to do — the next poll will restore whatever is actually stored
+    }
+    load();
+  }, [race.slug, load]);
+
+  // Actual splits: how long each marked segment took, measured from the
+  // previous mark (or the gun). A mark with unmarked segments before it covers
+  // all of them, so its goal is the sum of those segments' goal durations.
+  const splits = useMemo(() => {
+    let prevMs = startInstant.getTime();
+    let prevIndex = -1;
+    return segments.map((_, i) => {
+      const iso = marks[i]?.markedAt;
+      const markedInstant = iso ? new Date(iso) : null;
+      if (!markedInstant || Number.isNaN(markedInstant.getTime())) {
+        return null;
+      }
+      const coversFrom = prevIndex + 1;
+      let goalGold = 0;
+      let goalTeal = 0;
+      for (let j = coversFrom; j <= i; j++) {
+        goalGold += segments[j].goldSeconds;
+        goalTeal += segments[j].tealSeconds;
+      }
+      const splitSec = (markedInstant.getTime() - prevMs) / 1000;
+      const row = {
+        index: i,
+        markedInstant,
+        elapsedSec: (markedInstant.getTime() - startInstant.getTime()) / 1000,
+        splitSec,
+        outOfOrder: splitSec < 0,
+        coversFrom,
+        goalGold,
+        goalTeal,
+      };
+      prevMs = markedInstant.getTime();
+      prevIndex = i;
+      return row;
+    });
+  }, [marks, segments, startInstant]);
+
+  const markedSplits = splits.filter((s): s is NonNullable<typeof s> => s !== null);
+  const lastSplit = markedSplits.length > 0 ? markedSplits[markedSplits.length - 1] : null;
+
+  const [copied, setCopied] = useState(false);
+  async function copySplits() {
+    const lines = markedSplits.map((s) => {
+      const seg = segments[s.index];
+      const label =
+        s.coversFrom === s.index
+          ? seg.name
+          : `${segments[s.coversFrom].name} → ${seg.name}`;
+      const split = s.outOfOrder ? '--' : formatMinSec(s.splitSec);
+      return `${label}\t${split}\t${formatMinSec(s.elapsedSec)}`;
+    });
+    const text = [
+      `${race.athleteName} — ${race.eventLabel}`,
+      `Start ${formatClock(startInstant, race.timeZone)} ${formatDateLong(startInstant, race.timeZone)}`,
+      'Segment\tSplit\tRace clock',
+      ...lines,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
   }
 
   // Status banner
@@ -254,6 +387,8 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
           const atValue = markedInstant ? formatTimeInputValue(markedInstant, race.timeZone) : '';
           const noteValue = noteDrafts[i] ?? rec?.note ?? '';
           const Icon = ICONS[seg.icon];
+          const split = splits[i];
+          const isSaving = Boolean(saving[i]);
 
           let deltaClass = '';
           let deltaMsg: React.ReactNode = null;
@@ -298,8 +433,13 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
               </div>
               <p className={styles.yell}>{seg.yell}</p>
               <div className={styles.log}>
-                <button type="button" className={styles.markBtn} onClick={() => markNow(i)}>
-                  Mark now
+                <button
+                  type="button"
+                  className={styles.markBtn}
+                  aria-busy={isSaving}
+                  onClick={() => markNow(i)}
+                >
+                  {isSaving ? 'Saving…' : markedInstant ? 'Re-mark' : 'Mark now'}
                 </button>
                 <input
                   className={styles.atInput}
@@ -318,6 +458,50 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
                   &times;
                 </button>
               </div>
+              {split && (
+                <>
+                  <div className={styles.splitRow}>
+                    <span className={styles.splitCell}>
+                      <i>Split</i>
+                      <b>{split.outOfOrder ? '—' : formatMinSec(split.splitSec)}</b>
+                      <u>goal {formatMinSec(split.goalGold)}</u>
+                    </span>
+                    <span className={styles.splitCell}>
+                      <i>vs goal</i>
+                      <b
+                        className={
+                          split.outOfOrder
+                            ? ''
+                            : split.splitSec <= split.goalGold
+                              ? styles.splitGood
+                              : split.splitSec <= split.goalTeal
+                                ? styles.splitOk
+                                : styles.splitOff
+                        }
+                      >
+                        {split.outOfOrder ? '—' : formatDelta(split.splitSec - split.goalGold)}
+                      </b>
+                      <u>on this segment</u>
+                    </span>
+                    <span className={styles.splitCell}>
+                      <i>Race clock</i>
+                      <b>{formatMinSec(split.elapsedSec)}</b>
+                      <u>at {formatClock(split.markedInstant, race.timeZone)}</u>
+                    </span>
+                  </div>
+                  {split.coversFrom !== i && (
+                    <div className={styles.splitNote}>
+                      This split covers {segments[split.coversFrom].name} &rarr; {seg.name} — the
+                      segments in between were never marked.
+                    </div>
+                  )}
+                  {split.outOfOrder && (
+                    <div className={styles.splitNote}>
+                      This time is earlier than the mark before it — check the order.
+                    </div>
+                  )}
+                </>
+              )}
               {deltaMsg && <div className={`${styles.delta} ${deltaClass}`}>{deltaMsg}</div>}
               <input
                 className={styles.note}
@@ -331,6 +515,72 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
           );
         })}
       </ol>
+
+      {markedSplits.length > 0 && (
+        <section className={styles.recap}>
+          <div className={styles.recapHead}>
+            <h2 className={styles.recapTitle}>
+              {lastSplit && lastSplit.index === segments.length - 1
+                ? 'Splits — final'
+                : 'Splits so far'}
+            </h2>
+            <button type="button" className={styles.copyBtn} onClick={copySplits}>
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <div className={styles.recapScroll}>
+            <table className={styles.recapTable}>
+              <thead>
+                <tr>
+                  <th>Segment</th>
+                  <th>Split</th>
+                  <th>vs goal</th>
+                  <th>Race clock</th>
+                </tr>
+              </thead>
+              <tbody>
+                {markedSplits.map((s) => (
+                  <tr key={s.index}>
+                    <th scope="row">
+                      {s.coversFrom === s.index
+                        ? segments[s.index].name
+                        : `${segments[s.coversFrom].name} → ${segments[s.index].name}`}
+                    </th>
+                    <td>{s.outOfOrder ? '—' : formatMinSec(s.splitSec)}</td>
+                    <td
+                      className={
+                        s.outOfOrder
+                          ? ''
+                          : s.splitSec <= s.goalGold
+                            ? styles.splitGood
+                            : s.splitSec <= s.goalTeal
+                              ? styles.splitOk
+                              : styles.splitOff
+                      }
+                    >
+                      {s.outOfOrder ? '—' : formatDelta(s.splitSec - s.goalGold)}
+                    </td>
+                    <td>{formatMinSec(s.elapsedSec)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {lastSplit && (
+            <p className={styles.recapTotal}>
+              {lastSplit.index === segments.length - 1 ? 'Finish' : 'Through'}{' '}
+              <b>{segments[lastSplit.index].name}</b>: <b>{formatMinSec(lastSplit.elapsedSec)}</b>{' '}
+              on the race clock, {formatDelta(lastSplit.elapsedSec - cumulative[lastSplit.index].gold)}{' '}
+              vs the 1:05 line and{' '}
+              {formatDelta(lastSplit.elapsedSec - cumulative[lastSplit.index].teal)} vs the 1:10 line.
+            </p>
+          )}
+          <p className={styles.recapFine}>
+            Split = time from the previous mark (or the gun) to this one. &ldquo;vs goal&rdquo;
+            compares that against the 1:05 target for the same stretch.
+          </p>
+        </section>
+      )}
 
       <footer className={styles.footer}>
         <p>
@@ -366,6 +616,7 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
           totalTealSeconds={totalTeal}
           midpointGoldSeconds={cumulative[midIndex].gold}
           midpointTealSeconds={cumulative[midIndex].teal}
+          onClearMarks={clearAllMarks}
         />
       )}
     </div>
