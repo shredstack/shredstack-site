@@ -115,12 +115,23 @@
 }
 
 .key {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
   padding: 0.8rem 1rem 0.2rem;
   font-size: 0.76rem;
   color: var(--mut);
+}
+.keyRow {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.keyNote {
+  margin: 0.4rem 0 0;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+.keyNote b {
+  color: var(--ink);
+  font-weight: 700;
 }
 .keyItem {
   display: flex;
@@ -175,10 +186,18 @@
   margin-top: 0.05rem;
 }
 
+.targetsLabel {
+  margin-top: 0.6rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mut);
+  font-weight: 700;
+}
 .targets {
   display: flex;
   gap: 0.45rem;
-  margin-top: 0.6rem;
+  margin-top: 0.3rem;
 }
 .chip {
   flex: 1;
@@ -202,15 +221,25 @@
 }
 .chip b {
   display: block;
-  font-size: 1.02rem;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   margin-top: 0.05rem;
+  /* Deliberately wrappable: the chip is half a card wide, so on a narrow phone
+     the "PM MT" suffix drops to its own line instead of overflowing. */
+  line-height: 1.2;
+}
+.chipSuffix {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 .chip u {
   display: block;
   text-decoration: none;
-  font-size: 0.66rem;
+  font-size: 0.62rem;
   color: var(--mut);
   font-variant-numeric: tabular-nums;
 }

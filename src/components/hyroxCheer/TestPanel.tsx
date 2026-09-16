@@ -8,10 +8,9 @@ import type { RaceConfig } from '@/lib/hyroxCheer/races/slc2026';
 interface TestPanelProps {
   race: RaceConfig;
   startInstant: Date;
-  totalGoldSeconds: number;
-  totalTealSeconds: number;
+  totalPlanSeconds: number;
   midpointGoldSeconds: number;
-  midpointTealSeconds: number;
+  midpointPlanSeconds: number;
   /** Wipes every mark and note on the shared board. */
   onClearMarks: () => Promise<void> | void;
 }
@@ -26,10 +25,9 @@ function toDatetimeLocalValue(date: Date): string {
 export function TestPanel({
   race,
   startInstant,
-  totalGoldSeconds,
-  totalTealSeconds,
+  totalPlanSeconds,
   midpointGoldSeconds,
-  midpointTealSeconds,
+  midpointPlanSeconds,
   onClearMarks,
 }: TestPanelProps) {
   const router = useRouter();
@@ -55,12 +53,12 @@ export function TestPanel({
       getNow: () => new Date(startInstant.getTime() + (midpointGoldSeconds + 5) * 1000),
     },
     {
-      label: 'Past the teal line',
-      getNow: () => new Date(startInstant.getTime() + (midpointTealSeconds + 60) * 1000),
+      label: `Past the ${race.planLabel} plan`,
+      getNow: () => new Date(startInstant.getTime() + (midpointPlanSeconds + 60) * 1000),
     },
     {
       label: 'Finished',
-      getNow: () => new Date(startInstant.getTime() + (totalTealSeconds + 600) * 1000),
+      getNow: () => new Date(startInstant.getTime() + (totalPlanSeconds + 600) * 1000),
     },
   ];
 

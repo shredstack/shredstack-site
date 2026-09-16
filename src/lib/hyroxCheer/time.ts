@@ -51,7 +51,16 @@ export function getZonedDateParts(date: Date, timeZone: string) {
   return { year: get('year'), month: get('month'), day: get('day') };
 }
 
-export function formatClock(date: Date, timeZone: string): string {
+/**
+ * Splits a time of day into the digits and the "PM MT" suffix, so a tight
+ * layout can size the two differently and let the suffix wrap rather than
+ * overflow. Use `formatClock` unless you need that.
+ */
+export function formatClockParts(
+  date: Date,
+  timeZone: string,
+  zoneLabel?: string
+): { clock: string; suffix: string } {
   const dtf = new Intl.DateTimeFormat('en-US', {
     timeZone,
     hour12: true,
@@ -61,7 +70,20 @@ export function formatClock(date: Date, timeZone: string): string {
   });
   const parts = dtf.formatToParts(date);
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
-  return `${get('hour')}:${get('minute')}:${get('second')}`;
+  return {
+    clock: `${get('hour')}:${get('minute')}:${get('second')}`,
+    suffix: [get('dayPeriod'), zoneLabel].filter(Boolean).join(' '),
+  };
+}
+
+/**
+ * "3:54:30 PM MT" — a time of day, always with the meridiem, and with the zone
+ * label when one is given. Spectators read these next to race-clock durations
+ * like "4:30", so the AM/PM and the zone are what keep the two apart.
+ */
+export function formatClock(date: Date, timeZone: string, zoneLabel?: string): string {
+  const { clock, suffix } = formatClockParts(date, timeZone, zoneLabel);
+  return suffix ? `${clock} ${suffix}` : clock;
 }
 
 export function formatDateLong(date: Date, timeZone: string): string {
