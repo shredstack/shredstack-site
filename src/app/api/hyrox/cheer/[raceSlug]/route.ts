@@ -2,8 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { db, hyroxCheerMarks } from '@/db';
 import { getHyroxRace } from '@/lib/hyroxCheer/races';
+import { testModeActive } from '@/lib/hyroxCheer/testMode';
 
 const MAX_NOTE_LENGTH = 300;
+
+// Every spectator's browser polls GET every 5 seconds and expects to see marks
+// other people just made. Nothing here may ever be cached or prerendered, or
+// the whole board freezes at whatever it contained when the response was cached.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(
   _request: NextRequest,
@@ -111,10 +118,11 @@ export async function POST(
 }
 
 /**
- * Wipes every mark and note for a race — this is the "start over" button behind
- * the test panel. Gated on the same `locked` flag as the test panel itself, so
- * once the race is locked for race day nobody visiting the shared link can
- * clear the board out from under everyone else.
+ * Wipes every mark and note for a race — the "start over" button behind the
+ * test panel. Testing only: once `testModeActive` goes false (the race is
+ * locked, or the gun is close enough that the marks are real race data) the
+ * only way to erase a board is a code change or direct database access. That
+ * is deliberate — these splits are meant to live here permanently.
  */
 export async function DELETE(
   _request: NextRequest,
@@ -125,8 +133,14 @@ export async function DELETE(
   if (!found) {
     return NextResponse.json({ error: 'Unknown race' }, { status: 404 });
   }
-  if (found.race.locked) {
-    return NextResponse.json({ error: 'Race is locked' }, { status: 403 });
+  // Real wall clock on purpose: ?now= is a client-side override, so simulating
+  // race time while testing days out still wipes fine, but on the actual day
+  // this refuses no matter what any page thinks the time is.
+  if (!testModeActive(found.race)) {
+    return NextResponse.json(
+      { error: 'This board can no longer be wiped' },
+      { status: 403 }
+    );
   }
 
   await db.delete(hyroxCheerMarks).where(eq(hyroxCheerMarks.raceSlug, raceSlug));

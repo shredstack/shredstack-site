@@ -6,6 +6,7 @@ import styles from './cheer.module.css';
 import { ICONS } from './icons';
 import { TestPanel } from './TestPanel';
 import type { RaceConfig, Segment } from '@/lib/hyroxCheer/races/slc2026';
+import { testModeActive } from '@/lib/hyroxCheer/testMode';
 import {
   formatClock,
   formatClockParts,
@@ -23,8 +24,8 @@ interface MarkRecord {
   note: string | null;
 }
 
-function useSimulatedNow(locked: boolean, searchParams: URLSearchParams): Date {
-  const nowParam = locked ? null : searchParams.get('now');
+function useSimulatedNow(testMode: boolean, searchParams: URLSearchParams): Date {
+  const nowParam = testMode ? searchParams.get('now') : null;
   const lastParamRef = useRef<string | null>(null);
   const baseRef = useRef<{ simBase: number; realBase: number } | null>(null);
   const [, setTick] = useState(0);
@@ -52,16 +53,19 @@ function useSimulatedNow(locked: boolean, searchParams: URLSearchParams): Date {
 
 export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segment[] }) {
   const searchParams = useSearchParams();
-  const now = useSimulatedNow(race.locked, searchParams);
+  // Real wall clock, deliberately not `now` — a ?now= in the URL must not be
+  // able to argue the page back into test mode once race day arrives.
+  const testMode = testModeActive(race, Date.now());
+  const now = useSimulatedNow(testMode, searchParams);
 
   useEffect(() => {
-    if (!race.locked) {
+    if (testMode) {
       console.warn(`[hyrox-cheer] ${race.slug} is UNLOCKED — test overrides are live for anyone visiting this page.`);
     }
-  }, [race.locked, race.slug]);
+  }, [testMode, race.slug]);
 
   const startInstant = useMemo(() => {
-    if (!race.locked) {
+    if (testMode) {
       const startParam = searchParams.get('start');
       if (startParam) {
         const d = new Date(startParam);
@@ -69,7 +73,7 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
       }
     }
     return new Date(race.startISO);
-  }, [race, searchParams]);
+  }, [race, searchParams, testMode]);
 
   const cumulative = useMemo(() => {
     let gold = 0;
@@ -111,9 +115,64 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     [startInstant, race.timeZone, race.timeZoneLabel]
   );
 
+  /**
+   * Where she stands on the *whole race* at a given mark — not on the segment
+   * that mark ends.
+   *
+   * These two numbers disagree constantly and that is the point of the race
+   * plan: a slow sled push reads red on its own split while the race clock is
+   * still comfortably inside the 1:05 line, because the time was banked on the
+   * runs before it. So everywhere a segment delta appears, this appears next to
+   * it, and this is the one that gets the colour.
+   */
+  const standingAt = useCallback(
+    (elapsedSec: number, index: number) => {
+      const vsGold = elapsedSec - cumulative[index].gold;
+      const vsPlan = elapsedSec - cumulative[index].plan;
+      // Magnitude only — formatDelta always signs, and these read better in
+      // prose as "1:12 inside" than "-1:12 inside".
+      const mag = (n: number) => formatDelta(n).slice(1);
+      if (vsGold <= 0) {
+        return {
+          tier: 'gold' as const,
+          cls: styles.splitGood,
+          pill: styles.standingGold,
+          banner: styles.deltaAhead,
+          short: `${mag(vsGold)} inside ${race.goldLabel}`,
+          long: `Overall she is inside the ${race.goldLabel} line by ${mag(vsGold)} — dream-day pace. Tell her.`,
+          vsPlan,
+        };
+      }
+      if (vsPlan <= 0) {
+        return {
+          tier: 'plan' as const,
+          cls: styles.splitOk,
+          pill: styles.standingPlan,
+          banner: styles.deltaOntrack,
+          short: `${mag(vsPlan)} up on ${race.planLabel}`,
+          long: `Overall she is on the ${race.planLabel} plan with ${mag(vsPlan)} in hand, ${formatDelta(vsGold)} off the ${race.goldLabel} line.`,
+          vsPlan,
+        };
+      }
+      return {
+        tier: 'behind' as const,
+        cls: styles.splitOff,
+        pill: styles.standingBehind,
+        banner: styles.deltaBehind,
+        short: `${mag(vsPlan)} down on ${race.planLabel}`,
+        long: `Overall she is ${formatDelta(vsPlan)} past the ${race.planLabel} plan. Still a race — keep cheering.`,
+        vsPlan,
+      };
+    },
+    [cumulative, race.goldLabel, race.planLabel]
+  );
+
   const [marks, setMarks] = useState<Record<number, MarkRecord>>({});
   const [noteDrafts, setNoteDrafts] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState<Record<number, boolean>>({});
+  // Segments the viewer has deliberately re-opened for editing. Local to this
+  // browser and this visit — it's an "are you sure", not shared state.
+  const [unlocked, setUnlocked] = useState<Record<number, boolean>>({});
   const noteTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   // Anything typed or tapped locally is held here until the server echoes the
@@ -240,6 +299,7 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     pending.current = {};
     setMarks({});
     setNoteDrafts({});
+    setUnlocked({});
     try {
       await fetch(`/api/hyrox/cheer/${race.slug}`, { method: 'DELETE' });
     } catch {
@@ -287,6 +347,39 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
   const markedSplits = splits.filter((s): s is NonNullable<typeof s> => s !== null);
   const lastSplit = markedSplits.length > 0 ? markedSplits[markedSplits.length - 1] : null;
 
+  // The furthest point on the course anyone has marked. Everything behind it is
+  // history: she has run past it, so its mark is settled and goes read-only.
+  const lastMarkedIndex = lastSplit ? lastSplit.index : -1;
+
+  // The answer to "is she doing OK?", measured at the furthest mark. It rides
+  // in the pinned clock bar so it is on screen no matter which card you are
+  // looking at — nobody should have to scroll back up to find out.
+  const raceStanding = lastSplit ? standingAt(lastSplit.elapsedSec, lastSplit.index) : null;
+
+  /**
+   * A marked segment she has already moved on from. Still correctable — the Edit
+   * button on the card puts the controls back — just not with one stray tap.
+   */
+  const isSettled = useCallback(
+    (i: number) => Boolean(marks[i]?.markedAt) && i < lastMarkedIndex,
+    [marks, lastMarkedIndex]
+  );
+
+  // The clock bar pins to the top of the viewport once the legend above it
+  // scrolls away. A 1px sentinel just above it tells us when that has happened,
+  // so the bar can shrink and drop a shadow instead of silently overlapping.
+  const stickySentinel = useRef<HTMLDivElement | null>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const el = stickySentinel.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([entry]) => setStuck(!entry.isIntersecting), {
+      threshold: 0,
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   const [copied, setCopied] = useState(false);
   async function copySplits() {
     const lines = markedSplits.map((s) => {
@@ -296,12 +389,14 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
           ? seg.name
           : `${segments[s.coversFrom].name} → ${seg.name}`;
       const split = s.outOfOrder ? '--' : formatMinSec(s.splitSec);
-      return `${label}\t${split}\t${formatMinSec(s.elapsedSec)}`;
+      const segVsPlan = s.outOfOrder ? '--' : formatDelta(s.splitSec - s.goalPlan);
+      const overall = formatDelta(standingAt(s.elapsedSec, s.index).vsPlan);
+      return `${label}\t${split}\t${segVsPlan}\t${formatMinSec(s.elapsedSec)}\t${overall}`;
     });
     const text = [
       `${race.athleteName} — ${race.eventLabel}`,
       `Start ${clockOf(startInstant)} ${formatDateLong(startInstant, race.timeZone)}`,
-      'Segment\tSplit\tRace clock',
+      'Segment\tSplit\tSeg vs plan\tRace clock\tOverall vs plan',
       ...lines,
     ].join('\n');
     try {
@@ -313,10 +408,13 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     }
   }
 
-  // Status banner
+  // Status banner. `statusSub` is the full sentence; `statusSubStuck` is what
+  // replaces it once the bar pins to the top of the viewport, where a
+  // three-line sentence would eat half a phone screen on every card.
   const diffSec = (now.getTime() - startInstant.getTime()) / 1000;
   let statusMain: string;
   let statusSub: React.ReactNode;
+  let statusSubStuck: React.ReactNode;
   let nextIndex: number | null = null;
 
   if (diffSec < -86400) {
@@ -328,6 +426,11 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
         <b>{clockOf(startInstant)}</b> sharp.
       </>
     );
+    statusSubStuck = (
+      <>
+        Gun at <b>{clockOf(startInstant)}</b>.
+      </>
+    );
   } else if (diffSec < 0) {
     const s = Math.floor(-diffSec);
     statusMain = `Starts in ${Math.floor(s / 3600)}h ${`${Math.floor(s / 60) % 60}`.padStart(2, '0')}m`;
@@ -336,14 +439,11 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
         Right now it is <span className={styles.statusClock}>{clockOf(now)}</span>.
       </>
     );
+    statusSubStuck = statusSub;
   } else if (diffSec < totalPlan + 900) {
     // Prefer the actual marks fans have logged over the time estimate: once a
     // segment is marked, the athlete is past it, so the gold "next up" box
     // should sit right after the furthest segment anyone has marked so far.
-    let lastMarkedIndex = -1;
-    for (let i = 0; i < segments.length; i++) {
-      if (marks[i]?.markedAt) lastMarkedIndex = i;
-    }
     const timeBasedIndex = segments.findIndex((_, i) => diffSec < cumulative[i].plan);
     nextIndex =
       lastMarkedIndex === -1
@@ -354,6 +454,7 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     statusMain = `Race clock ${formatMinSec(diffSec)}`;
     if (nextIndex === -1) {
       statusSub = 'She should be done. Go find her.';
+      statusSubStuck = statusSub;
     } else {
       const seg = segments[nextIndex];
       statusSub = (
@@ -361,6 +462,11 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
           Next checkpoint: she should be done with <b>{seg.name}</b> by{' '}
           <b>{clockAfter(cumulative[nextIndex].plan)}</b> to stay on the {race.planLabel} plan
           &mdash; {clockAfter(cumulative[nextIndex].gold)} for {race.goldLabel}.
+        </>
+      );
+      statusSubStuck = (
+        <>
+          Next: <b>{seg.name}</b> by <b>{clockAfter(cumulative[nextIndex].plan)}</b>
         </>
       );
     }
@@ -371,7 +477,17 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
         Hope she crushed it. Right now it is <span className={styles.statusClock}>{clockOf(now)}</span>.
       </>
     );
+    statusSubStuck = (
+      <>
+        Right now it is <span className={styles.statusClock}>{clockOf(now)}</span>.
+      </>
+    );
   }
+
+  // ?now= / ?start= live in this browser's URL, so a viewer running one sees a
+  // different clock from everyone else on the same shared board. Say so.
+  const simulating =
+    testMode && Boolean(searchParams.get('now') || searchParams.get('start'));
 
   return (
     <div className={styles.page}>
@@ -391,11 +507,6 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
         </div>
       </header>
 
-      <div className={styles.status}>
-        <div className={styles.statusMain}>{statusMain}</div>
-        <div className={styles.statusSub}>{statusSub}</div>
-      </div>
-
       <div className={styles.key}>
         <div className={styles.keyRow}>
           <span className={styles.keyItem}>
@@ -411,8 +522,36 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
           Each card shows the <b>time of day</b> she should be <b>done</b> with that segment, and
           the <b>race clock</b> (time since her gun) at that moment. The pace under each segment
           name is her {race.planLabel} plan &mdash; that&rsquo;s the realistic target. Anything
-          inside the gold time is a dream day.
+          inside the gold time is a dream day. The clock bar below follows you down the page, and
+          the tag on it is the <b>whole race so far</b> &mdash; a red number on a single segment
+          further down only means that one stretch was slow.
         </p>
+      </div>
+
+      <div ref={stickySentinel} className={styles.statusSentinel} aria-hidden="true" />
+      <div className={`${styles.statusBar} ${stuck ? styles.statusBarStuck : ''}`}>
+        <div className={styles.status}>
+          <div className={styles.statusMain}>{statusMain}</div>
+          <div className={styles.statusRow}>
+            <div className={styles.statusSub}>{stuck ? statusSubStuck : statusSub}</div>
+            {raceStanding && (
+              <div className={`${styles.standing} ${raceStanding.pill}`}>
+                {raceStanding.short}
+                {/* Hidden by CSS once the bar pins, where one short line is the
+                    whole budget. */}
+                <span className={styles.standingThru}>
+                  {' '}
+                  through {segments[lastMarkedIndex].name}
+                </span>
+              </div>
+            )}
+          </div>
+          {simulating && (
+            <div className={styles.simBadge}>
+              Simulated clock &mdash; only in this browser
+            </div>
+          )}
+        </div>
       </div>
 
       <ol className={styles.list}>
@@ -424,24 +563,22 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
           const Icon = ICONS[seg.icon];
           const split = splits[i];
           const isSaving = Boolean(saving[i]);
+          const settled = isSettled(i);
+          const readOnly = settled && !unlocked[i];
 
-          let deltaClass = '';
-          let deltaMsg: React.ReactNode = null;
-          if (markedInstant) {
-            const elapsed = (markedInstant.getTime() - startInstant.getTime()) / 1000;
-            const vsGold = elapsed - cumulative[i].gold;
-            const vsPlan = elapsed - cumulative[i].plan;
-            if (vsGold <= 0) {
-              deltaClass = styles.deltaAhead;
-              deltaMsg = `Inside the ${race.goldLabel} line by ${formatDelta(-vsGold).slice(1)} — dream-day pace. Tell her.`;
-            } else if (vsPlan <= 0) {
-              deltaClass = styles.deltaOntrack;
-              deltaMsg = `On the ${race.planLabel} plan with ${formatDelta(-vsPlan).slice(1)} in hand, ${formatDelta(vsGold)} off the ${race.goldLabel} line.`;
-            } else {
-              deltaClass = styles.deltaBehind;
-              deltaMsg = `${formatDelta(vsPlan)} past the ${race.planLabel} plan. Still a race — keep cheering.`;
-            }
-          }
+          const standing =
+            markedInstant && !Number.isNaN(markedInstant.getTime())
+              ? standingAt((markedInstant.getTime() - startInstant.getTime()) / 1000, i)
+              : null;
+          // A segment slower than its own plan while the race as a whole is
+          // still ahead. That is a normal, good race — say so, because the red
+          // "+0:18" two lines up reads like bad news on its own.
+          const bankedThrough =
+            standing !== null &&
+            standing.tier !== 'behind' &&
+            split !== null &&
+            !split.outOfOrder &&
+            split.splitSec > split.goalPlan;
 
           return (
             <li key={seg.index} className={`${styles.card} ${i === nextIndex ? styles.cardNow : ''}`}>
@@ -468,32 +605,75 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
                 </span>
               </div>
               <p className={styles.yell}>{seg.yell}</p>
-              <div className={styles.log}>
-                <button
-                  type="button"
-                  className={styles.markBtn}
-                  aria-busy={isSaving}
-                  onClick={() => markNow(i)}
-                >
-                  {isSaving ? 'Saving…' : markedInstant ? 'Re-mark' : 'Mark now'}
-                </button>
-                <input
-                  className={styles.atInput}
-                  type="time"
-                  step={1}
-                  value={atValue}
-                  aria-label={`Actual time for ${seg.name}`}
-                  onChange={(e) => handleAtChange(i, e.target.value)}
-                />
-                <button
-                  type="button"
-                  className={styles.clearBtn}
-                  aria-label={`Clear ${seg.name}`}
-                  onClick={() => clearAt(i)}
-                >
-                  &times;
-                </button>
-              </div>
+              {readOnly ? (
+                <div className={styles.logLocked}>
+                  <span className={styles.lockedAt}>
+                    <i>Marked</i>
+                    <b>{markedInstant ? clockOf(markedInstant) : '—'}</b>
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.editBtn}
+                    aria-label={`Edit the marked time for ${seg.name}`}
+                    onClick={() => setUnlocked((prev) => ({ ...prev, [i]: true }))}
+                  >
+                    Edit
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className={styles.log}>
+                    <button
+                      type="button"
+                      className={styles.markBtn}
+                      aria-busy={isSaving}
+                      onClick={() => markNow(i)}
+                    >
+                      {isSaving ? 'Saving…' : markedInstant ? 'Re-mark' : 'Mark now'}
+                    </button>
+                    <input
+                      className={styles.atInput}
+                      type="time"
+                      step={1}
+                      value={atValue}
+                      aria-label={`Actual time for ${seg.name}`}
+                      onChange={(e) => handleAtChange(i, e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className={styles.clearBtn}
+                      aria-label={`Clear ${seg.name}`}
+                      onClick={() => clearAt(i)}
+                    >
+                      &times;
+                    </button>
+                  </div>
+                  {markedInstant && (
+                    <div className={styles.markedAt}>
+                      {/* Spelled out because the native time picker hides
+                          seconds on iOS, and seconds are the whole point. */}
+                      <span>
+                        Marked at <b>{clockOf(markedInstant)}</b>
+                      </span>
+                      {settled && (
+                        <button
+                          type="button"
+                          className={styles.doneBtn}
+                          onClick={() =>
+                            setUnlocked((prev) => {
+                              const next = { ...prev };
+                              delete next[i];
+                              return next;
+                            })
+                          }
+                        >
+                          Done
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
               {split && (
                 <>
                   <div className={styles.splitRow}>
@@ -517,16 +697,32 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
                       >
                         {split.outOfOrder ? '—' : formatDelta(split.splitSec - split.goalPlan)}
                       </b>
-                      <u>on this segment</u>
+                      <u>this segment only</u>
                     </span>
+                    {/* The race clock carries the colour, because it is the
+                        number that decides the day. The time of day this mark
+                        landed is no longer repeated here — it is spelled out in
+                        full, with seconds, directly above. */}
                     <span className={styles.splitCell}>
                       <i>Race clock</i>
-                      <b>{formatMinSec(split.elapsedSec)}</b>
-                      {/* Zone label omitted here only — the cell is a third of a card
-                          wide, and the target chips right above already carry it. */}
-                      <u>at {formatClock(split.markedInstant, race.timeZone)}</u>
+                      <b className={standing ? standing.cls : ''}>
+                        {formatMinSec(split.elapsedSec)}
+                      </b>
+                      <u>{standing ? standing.short : 'overall'}</u>
                     </span>
                   </div>
+                  {bankedThrough && standing && (
+                    <div className={styles.splitNote}>
+                      Slower than plan on this segment &mdash; but she banked enough earlier that
+                      the race clock is still{' '}
+                      <b>
+                        {standing.tier === 'gold'
+                          ? `inside the ${race.goldLabel} line`
+                          : `ahead of the ${race.planLabel} plan`}
+                      </b>
+                      .
+                    </div>
+                  )}
                   {split.coversFrom !== i && (
                     <div className={styles.splitNote}>
                       This split covers {segments[split.coversFrom].name} &rarr; {seg.name} — the
@@ -540,7 +736,9 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
                   )}
                 </>
               )}
-              {deltaMsg && <div className={`${styles.delta} ${deltaClass}`}>{deltaMsg}</div>}
+              {standing && (
+                <div className={`${styles.delta} ${standing.banner}`}>{standing.long}</div>
+              )}
               <input
                 className={styles.note}
                 type="text"
@@ -572,35 +770,40 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
                 <tr>
                   <th>Segment</th>
                   <th>Split</th>
-                  <th>vs plan</th>
+                  <th>Seg vs plan</th>
                   <th>Race clock</th>
+                  <th>Overall</th>
                 </tr>
               </thead>
               <tbody>
-                {markedSplits.map((s) => (
-                  <tr key={s.index}>
-                    <th scope="row">
-                      {s.coversFrom === s.index
-                        ? segments[s.index].name
-                        : `${segments[s.coversFrom].name} → ${segments[s.index].name}`}
-                    </th>
-                    <td>{s.outOfOrder ? '—' : formatMinSec(s.splitSec)}</td>
-                    <td
-                      className={
-                        s.outOfOrder
-                          ? ''
-                          : s.splitSec <= s.goalGold
-                            ? styles.splitGood
-                            : s.splitSec <= s.goalPlan
-                              ? styles.splitOk
-                              : styles.splitOff
-                      }
-                    >
-                      {s.outOfOrder ? '—' : formatDelta(s.splitSec - s.goalPlan)}
-                    </td>
-                    <td>{formatMinSec(s.elapsedSec)}</td>
-                  </tr>
-                ))}
+                {markedSplits.map((s) => {
+                  const st = standingAt(s.elapsedSec, s.index);
+                  return (
+                    <tr key={s.index}>
+                      <th scope="row">
+                        {s.coversFrom === s.index
+                          ? segments[s.index].name
+                          : `${segments[s.coversFrom].name} → ${segments[s.index].name}`}
+                      </th>
+                      <td>{s.outOfOrder ? '—' : formatMinSec(s.splitSec)}</td>
+                      <td
+                        className={
+                          s.outOfOrder
+                            ? ''
+                            : s.splitSec <= s.goalGold
+                              ? styles.splitGood
+                              : s.splitSec <= s.goalPlan
+                                ? styles.splitOk
+                                : styles.splitOff
+                        }
+                      >
+                        {s.outOfOrder ? '—' : formatDelta(s.splitSec - s.goalPlan)}
+                      </td>
+                      <td className={st.cls}>{formatMinSec(s.elapsedSec)}</td>
+                      <td className={st.cls}>{formatDelta(st.vsPlan)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -616,9 +819,11 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
             </p>
           )}
           <p className={styles.recapFine}>
-            Split = time from the previous mark (or the gun) to this one. &ldquo;vs plan&rdquo;
-            compares that against her {race.planLabel} target for the same stretch; gold means she
-            beat the {race.goldLabel} target too.
+            Split = time from the previous mark (or the gun) to this one, and &ldquo;seg vs
+            plan&rdquo; compares just that stretch against her {race.planLabel} target.
+            &ldquo;Overall&rdquo; is the one that decides the day: race clock against the{' '}
+            {race.planLabel} plan for the whole race so far. A red segment next to a gold overall
+            means she gave a little back on that one but is still up on the race.
           </p>
         </section>
       )}
@@ -633,7 +838,12 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
         </p>
         <p>
           This board is shared &mdash; everyone watching this page sees the same marks and notes,
-          live, as people add them. Sarah isn&rsquo;t reading it during the race, so cheer freely.
+          live, as people add them, on any phone or browser. Sarah isn&rsquo;t reading it during
+          the race, so cheer freely.
+        </p>
+        <p>
+          Once she&rsquo;s past a segment its mark locks so a stray tap can&rsquo;t overwrite it.
+          Got one wrong? Tap <b>Edit</b> on that card to correct the time, then <b>Done</b>.
         </p>
         <p className={styles.fine}>
           Times assume the wave goes off at{' '}
@@ -656,7 +866,7 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
         </div>
       </footer>
 
-      {!race.locked && (
+      {testMode && (
         <TestPanel
           race={race}
           startInstant={startInstant}
