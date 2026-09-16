@@ -7,6 +7,7 @@ import { ICONS } from './icons';
 import { TestPanel } from './TestPanel';
 import type { RaceConfig, Segment } from '@/lib/hyroxCheer/races/slc2026';
 import { testModeActive } from '@/lib/hyroxCheer/testMode';
+import { checkStartOverride } from '@/lib/hyroxCheer/startOverride';
 import {
   formatClock,
   formatClockParts,
@@ -64,16 +65,48 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     }
   }, [testMode, race.slug]);
 
-  const startInstant = useMemo(() => {
-    if (testMode) {
-      const startParam = searchParams.get('start');
-      if (startParam) {
-        const d = new Date(startParam);
-        if (!Number.isNaN(d.getTime())) return d;
-      }
-    }
-    return new Date(race.startISO);
-  }, [race, searchParams, testMode]);
+  /**
+   * The real gun, when the wave didn't go off when the schedule said it would.
+   * Shared state: it arrives on the same 5-second poll as the marks, so one
+   * person fixing a late wave fixes the clock on every phone watching the
+   * board. Null means "run to the scheduled time".
+   */
+  const [startOverrideISO, setStartOverrideISO] = useState<string | null>(null);
+  // Same optimistic-then-reconcile trick the marks use, for the same reason: a
+  // poll landing between the tap and the write finishing would make the start
+  // time visibly snap back, which on this control would be alarming.
+  const pendingStart = useRef<{ value: string | null; at: number } | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
+
+  const scheduledInstant = useMemo(() => new Date(race.startISO), [race.startISO]);
+
+  // ?start= is a private simulation living in one browser's URL and is dead on
+  // race day by design (testMode.ts). The override below it is the shared,
+  // race-day-legal correction. Highest precedence first.
+  const testStartInstant = useMemo(() => {
+    if (!testMode) return null;
+    const startParam = searchParams.get('start');
+    if (!startParam) return null;
+    const d = new Date(startParam);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }, [searchParams, testMode]);
+
+  const overrideInstant = useMemo(() => {
+    if (!startOverrideISO) return null;
+    const d = new Date(startOverrideISO);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }, [startOverrideISO]);
+
+  /** What the board as a whole is running on — ignores this browser's ?start=. */
+  const sharedStartInstant = overrideInstant ?? scheduledInstant;
+  /** What *this* page draws every number from. */
+  const startInstant = testStartInstant ?? sharedStartInstant;
+  const startSource: 'test' | 'override' | 'scheduled' = testStartInstant
+    ? 'test'
+    : overrideInstant
+      ? 'override'
+      : 'scheduled';
+  const startShiftSec = (sharedStartInstant.getTime() - scheduledInstant.getTime()) / 1000;
 
   const cumulative = useMemo(() => {
     let gold = 0;
@@ -173,6 +206,8 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
   // Segments the viewer has deliberately re-opened for editing. Local to this
   // browser and this visit — it's an "are you sure", not shared state.
   const [unlocked, setUnlocked] = useState<Record<number, boolean>>({});
+  // Segment index whose Edit button was tapped and is waiting on a confirm.
+  const [confirmEdit, setConfirmEdit] = useState<number | null>(null);
   const noteTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   // Anything typed or tapped locally is held here until the server echoes the
@@ -207,6 +242,19 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
       if (!res.ok) return;
       const data = await res.json();
       setMarks(mergeWithPending(data.marks ?? {}));
+
+      // Same reconcile as the marks: hold this browser's own change until the
+      // server echoes it, then follow the server from then on.
+      const serverStart: string | null = data.startOverrideAt ?? null;
+      const p = pendingStart.current;
+      const sameInstant = (a: string | null, b: string | null) =>
+        a === null || b === null ? a === b : new Date(a).getTime() === new Date(b).getTime();
+      if (!p) {
+        setStartOverrideISO(serverStart);
+      } else if (sameInstant(p.value, serverStart) || Date.now() - p.at > PENDING_TTL_MS) {
+        pendingStart.current = null;
+        setStartOverrideISO(serverStart);
+      }
     } catch {
       // keep whatever we last had; degrade quietly
     }
@@ -247,6 +295,40 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     [race.slug, load]
   );
 
+  /**
+   * Writes the corrected gun to the shared board. `null` puts the scheduled
+   * time back. On a refusal the optimistic value is dropped immediately rather
+   * than left standing — a start time only this phone believes in is worse than
+   * no correction at all.
+   */
+  const postStartOverride = useCallback(
+    async (startAtMs: number | null) => {
+      const value = startAtMs === null ? null : new Date(startAtMs).toISOString();
+      setStartError(null);
+      pendingStart.current = { value, at: Date.now() };
+      setStartOverrideISO(value);
+      try {
+        const res = await fetch(`/api/hyrox/cheer/${race.slug}/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ startAt: value }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          pendingStart.current = null;
+          setStartError(data?.error ?? 'That start time was refused — nothing changed.');
+        }
+      } catch {
+        pendingStart.current = null;
+        setStartError('Could not reach the server — the start time did not change.');
+      } finally {
+        // Don't wait up to 5s to find out what actually stuck.
+        load();
+      }
+    },
+    [race.slug, load]
+  );
+
   function setMarkedAt(i: number, iso: string | null) {
     const record: MarkRecord = { markedAt: iso, note: marks[i]?.note ?? null };
     applyLocal(i, record);
@@ -255,6 +337,14 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
 
   function markNow(i: number) {
     setMarkedAt(i, now.toISOString());
+    // A fresh mark settles immediately. Matters for the one path that can reach
+    // this button while the card is open for editing: clearing a mark with the
+    // × and then re-marking it.
+    setUnlocked((prev) => {
+      const next = { ...prev };
+      delete next[i];
+      return next;
+    });
   }
 
   function clearAt(i: number) {
@@ -300,6 +390,11 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     setMarks({});
     setNoteDrafts({});
     setUnlocked({});
+    setConfirmEdit(null);
+    // DELETE drops the race-state row too, so the gun goes back to scheduled.
+    pendingStart.current = null;
+    setStartOverrideISO(null);
+    setStartError(null);
     try {
       await fetch(`/api/hyrox/cheer/${race.slug}`, { method: 'DELETE' });
     } catch {
@@ -357,13 +452,119 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
   const raceStanding = lastSplit ? standingAt(lastSplit.elapsedSec, lastSplit.index) : null;
 
   /**
-   * A marked segment she has already moved on from. Still correctable — the Edit
-   * button on the card puts the controls back — just not with one stray tap.
+   * A segment that has been marked. The moment a time lands it goes read-only —
+   * including the one she just finished, which used to keep a live "Re-mark"
+   * button sitting under a spectator's thumb on a scrolling phone. Still
+   * correctable: Edit (behind a confirm) puts the controls back with the
+   * existing time already in them.
    */
-  const isSettled = useCallback(
-    (i: number) => Boolean(marks[i]?.markedAt) && i < lastMarkedIndex,
-    [marks, lastMarkedIndex]
-  );
+  const isSettled = useCallback((i: number) => Boolean(marks[i]?.markedAt), [marks]);
+
+  /**
+   * The start-time correction, as a two-screen dialog: pick a gun time, then
+   * confirm it on a second screen that spells out what it does. Nothing is
+   * written until the second screen's button.
+   *
+   * Two screens because this single control rewrites the race clock and all 32
+   * goal times on every phone watching the board. That is worth three
+   * deliberate taps and a changed value; it is not worth one stray thumb.
+   *
+   * On the confirm screen a null `candidateMs` means "put the scheduled gun
+   * back", which is the way out of a correction somebody got wrong.
+   */
+  const [startDialog, setStartDialog] = useState<
+    { step: 'pick'; candidateMs: number } | { step: 'confirm'; candidateMs: number | null } | null
+  >(null);
+
+  // Real wall clock and the same rule the API enforces, so the dialog can never
+  // offer a time the server will refuse. Re-evaluated every tick, so the
+  // control appears on its own when the race-day window opens.
+  const startWindowOpen = checkStartOverride(scheduledInstant.getTime(), null, Date.now(), {
+    ignoreWindow: testMode,
+  }).ok;
+
+  const startCheck =
+    startDialog?.step === 'pick'
+      ? checkStartOverride(scheduledInstant.getTime(), startDialog.candidateMs, Date.now(), {
+          ignoreWindow: testMode,
+        })
+      : null;
+
+  // What the board would look like with the proposed gun — the numbers a
+  // spectator can actually sanity-check against the announcer.
+  const startPreview =
+    startDialog?.step === 'pick'
+      ? {
+          gun: clockOf(new Date(startDialog.candidateMs)),
+          first: clockOf(new Date(startDialog.candidateMs + cumulative[0].plan * 1000)),
+          finish: clockOf(new Date(startDialog.candidateMs + totalPlan * 1000)),
+          shiftSec: (startDialog.candidateMs - scheduledInstant.getTime()) / 1000,
+          unchanged: startDialog.candidateMs === sharedStartInstant.getTime(),
+        }
+      : null;
+
+  // A gun set later than a mark someone already logged would put that mark at a
+  // negative race clock. Usually it means the wrong field got edited.
+  const marksBeforeCandidate =
+    startDialog?.step === 'pick'
+      ? markedSplits.filter((s) => s.markedInstant.getTime() < startDialog.candidateMs).length
+      : 0;
+
+  function openStartDialog() {
+    setStartError(null);
+    setStartDialog({ step: 'pick', candidateMs: sharedStartInstant.getTime() });
+  }
+
+  function nudgeCandidate(deltaMs: number) {
+    setStartDialog((d) =>
+      d?.step === 'pick' ? { ...d, candidateMs: d.candidateMs + deltaMs } : d
+    );
+  }
+
+  function setCandidateFromTimeInput(value: string) {
+    setStartDialog((d) => {
+      if (d?.step !== 'pick') return d;
+      const parsed = parseTimeInputValue(value);
+      if (!parsed) return d;
+      const current = new Date(d.candidateMs);
+      // Date parts come from the candidate itself, so nudging past midnight and
+      // then typing a time stays on the day the candidate is actually on.
+      const { year, month, day } = getZonedDateParts(current, race.timeZone);
+      // Same mobile-picker guard as the marks: "HH:MM" back from the OS must
+      // not silently throw away seconds the time already had.
+      let second = parsed.second;
+      if (value.split(':').length < 3) {
+        const existing = parseTimeInputValue(formatTimeInputValue(current, race.timeZone));
+        if (existing && existing.hour === parsed.hour && existing.minute === parsed.minute) {
+          second = existing.second;
+        }
+      }
+      const instant = zonedTimeToInstant(
+        year,
+        month,
+        day,
+        parsed.hour,
+        parsed.minute,
+        second,
+        race.timeZone
+      );
+      return { ...d, candidateMs: instant.getTime() };
+    });
+  }
+
+  // Focus lands on the button that changes nothing, on both screens, and
+  // Escape/backdrop close the whole thing — same contract as the Edit confirm.
+  const startSafeRef = useRef<HTMLButtonElement | null>(null);
+  const startStep = startDialog?.step ?? null;
+  useEffect(() => {
+    if (startStep === null) return;
+    startSafeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setStartDialog(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [startStep]);
 
   // The clock bar pins to the top of the viewport once the legend above it
   // scrolls away. A 1px sentinel just above it tells us when that has happened,
@@ -380,6 +581,21 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     return () => io.disconnect();
   }, []);
 
+  // The Edit confirm. Focus lands on "Keep it" and Escape / a backdrop tap both
+  // cancel, so every cheap way out of this dialog is the one that changes
+  // nothing — an accidental Edit tap should cost a spectator one more tap, not
+  // a split.
+  const keepItRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (confirmEdit === null) return;
+    keepItRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setConfirmEdit(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [confirmEdit]);
+
   const [copied, setCopied] = useState(false);
   async function copySplits() {
     const lines = markedSplits.map((s) => {
@@ -395,7 +611,11 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     });
     const text = [
       `${race.athleteName} — ${race.eventLabel}`,
-      `Start ${clockOf(startInstant)} ${formatDateLong(startInstant, race.timeZone)}`,
+      `Start ${clockOf(startInstant)} ${formatDateLong(startInstant, race.timeZone)}${
+        startSource === 'override'
+          ? ` (corrected ${formatDelta(startShiftSec)} from the scheduled ${clockOf(scheduledInstant)})`
+          : ''
+      }`,
       'Segment\tSplit\tSeg vs plan\tRace clock\tOverall vs plan',
       ...lines,
     ].join('\n');
@@ -412,6 +632,7 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
   // replaces it once the bar pins to the top of the viewport, where a
   // three-line sentence would eat half a phone screen on every card.
   const diffSec = (now.getTime() - startInstant.getTime()) / 1000;
+  const raceLive = diffSec >= 0 && diffSec < totalPlan + 900;
   let statusMain: string;
   let statusSub: React.ReactNode;
   let statusSubStuck: React.ReactNode;
@@ -484,6 +705,40 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     );
   }
 
+  /**
+   * The second clock. The race clock above never resets; this one restarts from
+   * zero on every mark, so the bar answers both "how long has she been racing?"
+   * and "how long has she been on the stretch she's on right now?" — the second
+   * one measured against that single segment's own target, not the race's.
+   *
+   * Its zero is the last mark anyone logged (the gun, before the first one), so
+   * it resets for everybody the moment a mark lands, not just for whoever
+   * tapped the button.
+   */
+  const currentIndex = raceLive && lastMarkedIndex + 1 < segments.length ? lastMarkedIndex + 1 : -1;
+  const segmentClock = (() => {
+    if (currentIndex === -1) return null;
+    const seg = segments[currentIndex];
+    const fromMs = lastSplit ? lastSplit.markedInstant.getTime() : startInstant.getTime();
+    const elapsedSec = (now.getTime() - fromMs) / 1000;
+    // A mistyped mark can sit in the future. A segment clock counting up from a
+    // negative number is noise — wait for the real clock to reach it.
+    if (elapsedSec < 0) return null;
+    const remaining = seg.planSeconds - elapsedSec;
+    return {
+      name: seg.name,
+      elapsedSec,
+      planSeconds: seg.planSeconds,
+      cls:
+        elapsedSec <= seg.goldSeconds
+          ? styles.splitGood
+          : elapsedSec <= seg.planSeconds
+            ? styles.splitOk
+            : styles.splitOff,
+      note: remaining >= 0 ? `${formatMinSec(remaining)} left` : `${formatDelta(-remaining)} over`,
+    };
+  })();
+
   // ?now= / ?start= live in this browser's URL, so a viewer running one sees a
   // different clock from everyone else on the same shared board. Say so.
   const simulating =
@@ -502,8 +757,21 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
         <div className={styles.eventLine}>
           {race.eventLabel}
           <br />
-          {formatDateLong(new Date(race.startISO), race.timeZone)} &middot; wave starts{' '}
-          <b>{formatClock(new Date(race.startISO), race.timeZone, race.timeZoneLabel)}</b> sharp
+          {formatDateLong(startInstant, race.timeZone)} &middot;{' '}
+          {startSource === 'override' ? (
+            <>
+              wave starts <b>{clockOf(startInstant)}</b>
+              <span className={styles.eventLineWas}>
+                {' '}
+                &mdash; corrected {formatDelta(startShiftSec)} from the scheduled{' '}
+                {clockOf(scheduledInstant)}
+              </span>
+            </>
+          ) : (
+            <>
+              wave starts <b>{clockOf(startInstant)}</b> sharp
+            </>
+          )}
         </div>
       </header>
 
@@ -532,6 +800,20 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
       <div className={`${styles.statusBar} ${stuck ? styles.statusBarStuck : ''}`}>
         <div className={styles.status}>
           <div className={styles.statusMain}>{statusMain}</div>
+          {segmentClock && (
+            <div className={styles.segClock}>
+              <span className={styles.segClockLabel}>
+                On <b>{segmentClock.name}</b>
+              </span>
+              <b className={`${styles.segClockTime} ${segmentClock.cls}`}>
+                {formatMinSec(segmentClock.elapsedSec)}
+              </b>
+              <span className={styles.segClockGoal}>
+                plan {formatMinSec(segmentClock.planSeconds)} &middot;{' '}
+                <b className={segmentClock.cls}>{segmentClock.note}</b>
+              </span>
+            </div>
+          )}
           <div className={styles.statusRow}>
             <div className={styles.statusSub}>{stuck ? statusSubStuck : statusSub}</div>
             {raceStanding && (
@@ -546,6 +828,51 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
               </div>
             )}
           </div>
+          {/* A corrected gun changes every number above it, so it says so
+              permanently — including in the pinned bar, where it is the one
+              piece of context that stops the clock looking simply wrong. */}
+          {startSource === 'override' && (
+            <div className={styles.startShift}>
+              <span>
+                Gun corrected to <b>{clockOf(sharedStartInstant)}</b>
+                <span className={styles.startShiftDelta}>
+                  {' '}
+                  ({formatDelta(startShiftSec)} vs scheduled)
+                </span>
+              </span>
+              {startWindowOpen && (
+                <button
+                  type="button"
+                  className={styles.startShiftBtn}
+                  onClick={openStartDialog}
+                  aria-haspopup="dialog"
+                >
+                  Adjust
+                </button>
+              )}
+            </div>
+          )}
+          {/* Quiet on purpose: a rare, deliberate action, not something anyone
+              should be drawn to. Hidden once the bar pins — a spectator fixing
+              a late wave can spare the scroll back up. */}
+          {startSource !== 'override' && startWindowOpen && (
+            <button
+              type="button"
+              className={styles.startFixLink}
+              onClick={openStartDialog}
+              aria-haspopup="dialog"
+            >
+              Wave went off late? Fix the start time
+            </button>
+          )}
+          {startError && (
+            <div className={styles.startErrBar} role="alert">
+              {startError}{' '}
+              <button type="button" onClick={() => setStartError(null)} aria-label="Dismiss">
+                &times;
+              </button>
+            </div>
+          )}
           {simulating && (
             <div className={styles.simBadge}>
               Simulated clock &mdash; only in this browser
@@ -615,7 +942,8 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
                     type="button"
                     className={styles.editBtn}
                     aria-label={`Edit the marked time for ${seg.name}`}
-                    onClick={() => setUnlocked((prev) => ({ ...prev, [i]: true }))}
+                    aria-haspopup="dialog"
+                    onClick={() => setConfirmEdit(i)}
                   >
                     Edit
                   </button>
@@ -623,14 +951,19 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
               ) : (
                 <>
                   <div className={styles.log}>
-                    <button
-                      type="button"
-                      className={styles.markBtn}
-                      aria-busy={isSaving}
-                      onClick={() => markNow(i)}
-                    >
-                      {isSaving ? 'Saving…' : markedInstant ? 'Re-mark' : 'Mark now'}
-                    </button>
+                    {/* Only ever offered on a segment with no time on it. Once
+                        one lands, the way to change it is Edit → confirm →
+                        adjust the prefilled time, never a one-tap overwrite. */}
+                    {!markedInstant && (
+                      <button
+                        type="button"
+                        className={styles.markBtn}
+                        aria-busy={isSaving}
+                        onClick={() => markNow(i)}
+                      >
+                        {isSaving ? 'Saving…' : 'Mark now'}
+                      </button>
+                    )}
                     <input
                       className={styles.atInput}
                       type="time"
@@ -842,13 +1175,43 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
           the race, so cheer freely.
         </p>
         <p>
-          Once she&rsquo;s past a segment its mark locks so a stray tap can&rsquo;t overwrite it.
-          Got one wrong? Tap <b>Edit</b> on that card to correct the time, then <b>Done</b>.
+          The clock bar carries two clocks: the <b>race clock</b>, which runs from her gun and
+          never resets, and underneath it the <b>segment clock</b>, which restarts at zero every
+          time someone marks a segment &mdash; that one is how long she has been on the stretch
+          she&rsquo;s on right now, against that segment&rsquo;s own target.
         </p>
+        <p>
+          A mark locks the moment it lands, so a stray tap can&rsquo;t overwrite it. Got one wrong?
+          Tap <b>Edit</b> on that card and confirm; the time you already logged stays filled in for
+          you to adjust, then tap <b>Done</b>.
+        </p>
+        <p>
+          <b>If her wave goes off late</b>, one person can fix it for everybody. Tap{' '}
+          <b>Fix the start time</b> in the clock bar, set the gun to when she actually started, and
+          confirm on the second screen. The race clock, every &ldquo;should be done by&rdquo; time
+          on every card, and the finish estimate all move with it, on every phone watching this
+          page. Marks already logged keep the exact times they were logged at &mdash; only their
+          race-clock numbers change. It takes two screens on purpose, and it can always be put back
+          to the scheduled time.
+        </p>
+        {startWindowOpen && (
+          <button
+            type="button"
+            className={styles.resetBtn}
+            onClick={openStartDialog}
+            aria-haspopup="dialog"
+          >
+            {startSource === 'override'
+              ? `Gun is set to ${clockOf(sharedStartInstant)} — adjust it`
+              : 'Fix the start time'}
+          </button>
+        )}
         <p className={styles.fine}>
-          Times assume the wave goes off at{' '}
-          {formatClock(new Date(race.startISO), race.timeZone, race.timeZoneLabel)} and are her own
-          split targets for a {race.planLabel} finish. Run 1 is short &mdash; it starts in the
+          Times assume the wave goes off at {clockOf(startInstant)}
+          {startSource === 'override'
+            ? ` (corrected from the scheduled ${clockOf(scheduledInstant)})`
+            : ''}{' '}
+          and are her own split targets for a {race.planLabel} finish. Run 1 is short &mdash; it starts in the
           tunnel and skips about 300&nbsp;m, so it is planned at ~700&nbsp;m and is the fastest
           split of the day; runs 2&ndash;8 are 1&nbsp;km each. Each station&rsquo;s target includes
           the roxzone walk out of it, which is where the course-side timing mats sit. The{' '}
@@ -865,6 +1228,238 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
           <ICONS.nugget size={18} />
         </div>
       </footer>
+
+      {confirmEdit !== null && (
+        <div
+          className={styles.confirmBackdrop}
+          onClick={() => setConfirmEdit(null)}
+          role="presentation"
+        >
+          <div
+            className={styles.confirmBox}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cheerConfirmTitle"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className={styles.confirmTitle} id="cheerConfirmTitle">
+              Edit {segments[confirmEdit].name}?
+            </h2>
+            <p className={styles.confirmBody}>
+              It&rsquo;s marked at{' '}
+              <b>
+                {marks[confirmEdit]?.markedAt
+                  ? clockOf(new Date(marks[confirmEdit]!.markedAt!))
+                  : '—'}
+              </b>
+              . Nothing gets erased &mdash; that time stays filled in and you can adjust it.
+            </p>
+            <div className={styles.confirmActions}>
+              <button
+                type="button"
+                ref={keepItRef}
+                className={styles.confirmKeep}
+                onClick={() => setConfirmEdit(null)}
+              >
+                Keep it
+              </button>
+              <button
+                type="button"
+                className={styles.confirmGo}
+                onClick={() => {
+                  setUnlocked((prev) => ({ ...prev, [confirmEdit]: true }));
+                  setConfirmEdit(null);
+                }}
+              >
+                Yes, edit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {startDialog && (
+        <div
+          className={styles.confirmBackdrop}
+          onClick={() => setStartDialog(null)}
+          role="presentation"
+        >
+          <div
+            className={`${styles.confirmBox} ${styles.startBox}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cheerStartTitle"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {startDialog.step === 'pick' && startPreview && startCheck ? (
+              <>
+                <h2 className={styles.confirmTitle} id="cheerStartTitle">
+                  Fix the start time
+                </h2>
+                <p className={styles.confirmBody}>
+                  Her wave was scheduled for <b>{clockOf(scheduledInstant)}</b>. Set this to when
+                  she actually started and the whole board follows &mdash; for everyone watching,
+                  not just this phone.
+                </p>
+
+                <div className={styles.startQuick}>
+                  {[-5, -1, 1, 5, 15].map((mins) => (
+                    <button
+                      key={mins}
+                      type="button"
+                      onClick={() => nudgeCandidate(mins * 60 * 1000)}
+                    >
+                      {mins > 0 ? `+${mins}` : mins} min
+                    </button>
+                  ))}
+                </div>
+
+                <label className={styles.startField}>
+                  <span>Gun time ({race.timeZoneLabel})</span>
+                  <input
+                    className={styles.atInput}
+                    type="time"
+                    step={1}
+                    value={formatTimeInputValue(new Date(startDialog.candidateMs), race.timeZone)}
+                    onChange={(e) => setCandidateFromTimeInput(e.target.value)}
+                  />
+                </label>
+
+                <div className={styles.startPreview}>
+                  <div className={styles.startPreviewGun}>
+                    <i>New gun</i>
+                    <b>{startPreview.gun}</b>
+                    <u>
+                      {startPreview.shiftSec === 0
+                        ? 'the scheduled time'
+                        : `${formatDelta(startPreview.shiftSec)} vs scheduled`}
+                    </u>
+                  </div>
+                  <div className={styles.startPreviewRows}>
+                    <div>
+                      <span>{segments[0].name} due</span>
+                      <b>{startPreview.first}</b>
+                    </div>
+                    <div>
+                      <span>{race.planLabel} finish</span>
+                      <b>{startPreview.finish}</b>
+                    </div>
+                  </div>
+                </div>
+
+                {!startCheck.ok && <p className={styles.startErr}>{startCheck.error}</p>}
+                {marksBeforeCandidate > 0 && (
+                  <p className={styles.startWarn}>
+                    {marksBeforeCandidate === 1
+                      ? 'One mark already logged is earlier than this gun time, so its race clock would run backwards.'
+                      : `${marksBeforeCandidate} marks already logged are earlier than this gun time, so their race clocks would run backwards.`}{' '}
+                    Double-check before you confirm.
+                  </p>
+                )}
+
+                <div className={styles.confirmActions}>
+                  <button
+                    type="button"
+                    ref={startSafeRef}
+                    className={styles.confirmKeep}
+                    onClick={() => setStartDialog(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.confirmGo}
+                    disabled={!startCheck.ok || startPreview.unchanged}
+                    onClick={() =>
+                      setStartDialog({ step: 'confirm', candidateMs: startDialog.candidateMs })
+                    }
+                  >
+                    Continue
+                  </button>
+                </div>
+
+                {startSource === 'override' && (
+                  <button
+                    type="button"
+                    className={styles.startResetLink}
+                    onClick={() => setStartDialog({ step: 'confirm', candidateMs: null })}
+                  >
+                    Put the gun back to the scheduled {clockOf(scheduledInstant)}
+                  </button>
+                )}
+              </>
+            ) : startDialog.step === 'confirm' ? (
+              (() => {
+                // The second screen. Everything here is read-only: the only way
+                // forward is the one button, and it says exactly what it sets.
+                const target =
+                  startDialog.candidateMs === null
+                    ? scheduledInstant.getTime()
+                    : startDialog.candidateMs;
+                const shift = (target - scheduledInstant.getTime()) / 1000;
+                const isReset = startDialog.candidateMs === null;
+                const n = markedSplits.length;
+                // A gun that moves later makes a fixed wall-clock mark read as a
+                // *smaller* race clock, hence the flipped sign.
+                const clockShift = (target - sharedStartInstant.getTime()) / 1000;
+                return (
+                  <>
+                    <h2 className={styles.confirmTitle} id="cheerStartTitle">
+                      {isReset ? 'Put the gun back?' : 'Set the gun for everyone?'}
+                    </h2>
+                    <div className={styles.startBig}>{clockOf(new Date(target))}</div>
+                    <div className={styles.startBigSub}>
+                      {shift === 0
+                        ? 'the scheduled start time'
+                        : `${formatDelta(shift)} ${shift > 0 ? 'later' : 'earlier'} than scheduled`}
+                    </div>
+                    <p className={styles.confirmBody}>
+                      This resets the race clock and every goal time on this page for{' '}
+                      <b>everyone watching</b> &mdash; not just this phone.
+                      {n > 0 && (
+                        <>
+                          {' '}
+                          {n === 1
+                            ? 'The one mark already logged keeps the exact time it was logged at; its race-clock number shifts by '
+                            : `All ${n} marks already logged keep the exact times they were logged at; their race-clock numbers shift by `}
+                          <b>{formatDelta(-clockShift)}</b>.
+                        </>
+                      )}
+                    </p>
+                    <div className={styles.confirmActions}>
+                      <button
+                        type="button"
+                        ref={startSafeRef}
+                        className={styles.confirmKeep}
+                        onClick={() =>
+                          setStartDialog({
+                            step: 'pick',
+                            candidateMs: isReset ? sharedStartInstant.getTime() : target,
+                          })
+                        }
+                      >
+                        Go back
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.confirmGo} ${styles.confirmDanger}`}
+                        onClick={() => {
+                          setStartDialog(null);
+                          postStartOverride(startDialog.candidateMs);
+                        }}
+                      >
+                        {isReset
+                          ? 'Yes, use the scheduled time'
+                          : `Yes, she started at ${clockOf(new Date(target))}`}
+                      </button>
+                    </div>
+                  </>
+                );
+              })()
+            ) : null}
+          </div>
+        </div>
+      )}
 
       {testMode && (
         <TestPanel

@@ -4,6 +4,11 @@
 // "clear all marks" wipe. See lib/hyroxCheer/testMode.ts: all three also switch
 // off on their own two hours before the gun, so forgetting this flag can't cost
 // Sarah her race data or show a spectator a simulated clock.
+//
+// Deliberately NOT gated by it: the spectator start-time correction (see
+// lib/hyroxCheer/startOverride.ts). A late wave is a race-day problem, so its
+// fix has to work on race day, with the race locked. It has its own guard rails
+// — a bounded offset and a race-day-only window — instead of this flag.
 // TODO(lock): still flip `locked` to true before race week (start is Fri
 // 9/18/2026) — the time window is the safety net, not the plan.
 export const RACE = {

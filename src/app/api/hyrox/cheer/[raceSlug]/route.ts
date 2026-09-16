@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
-import { db, hyroxCheerMarks } from '@/db';
+import { db, hyroxCheerMarks, hyroxCheerRaceState } from '@/db';
 import { getHyroxRace } from '@/lib/hyroxCheer/races';
 import { testModeActive } from '@/lib/hyroxCheer/testMode';
 
@@ -22,10 +22,13 @@ export async function GET(
     return NextResponse.json({ error: 'Unknown race' }, { status: 404 });
   }
 
-  const rows = await db
-    .select()
-    .from(hyroxCheerMarks)
-    .where(eq(hyroxCheerMarks.raceSlug, raceSlug));
+  const [rows, stateRows] = await Promise.all([
+    db.select().from(hyroxCheerMarks).where(eq(hyroxCheerMarks.raceSlug, raceSlug)),
+    db
+      .select({ startOverrideAt: hyroxCheerRaceState.startOverrideAt })
+      .from(hyroxCheerRaceState)
+      .where(eq(hyroxCheerRaceState.raceSlug, raceSlug)),
+  ]);
 
   const marks: Record<number, { markedAt: string | null; note: string | null }> = {};
   for (const row of rows) {
@@ -35,7 +38,15 @@ export async function GET(
     };
   }
 
-  return NextResponse.json({ marks });
+  // Rides along with the marks rather than sitting on its own endpoint: every
+  // spectator's browser already polls this every 5 seconds, so a corrected gun
+  // reaches every phone on the same tick a mark would, with no extra request.
+  const startOverrideAt = stateRows[0]?.startOverrideAt ?? null;
+
+  return NextResponse.json({
+    marks,
+    startOverrideAt: startOverrideAt ? startOverrideAt.toISOString() : null,
+  });
 }
 
 export async function POST(
@@ -118,8 +129,9 @@ export async function POST(
 }
 
 /**
- * Wipes every mark and note for a race — the "start over" button behind the
- * test panel. Testing only: once `testModeActive` goes false (the race is
+ * Wipes every mark and note for a race, and puts the gun back to the scheduled
+ * time — the "start over" button behind the test panel. Testing only: once
+ * `testModeActive` goes false (the race is
  * locked, or the gun is close enough that the marks are real race data) the
  * only way to erase a board is a code change or direct database access. That
  * is deliberate — these splits are meant to live here permanently.
@@ -143,7 +155,10 @@ export async function DELETE(
     );
   }
 
-  await db.delete(hyroxCheerMarks).where(eq(hyroxCheerMarks.raceSlug, raceSlug));
+  await Promise.all([
+    db.delete(hyroxCheerMarks).where(eq(hyroxCheerMarks.raceSlug, raceSlug)),
+    db.delete(hyroxCheerRaceState).where(eq(hyroxCheerRaceState.raceSlug, raceSlug)),
+  ]);
 
   return NextResponse.json({ ok: true });
 }

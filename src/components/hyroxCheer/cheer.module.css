@@ -92,6 +92,12 @@
 .eventLine b {
   color: var(--ink);
 }
+/* Only present once a spectator has corrected a late gun. Quiet, but never
+   hidden: the scheduled time is what is printed on her heat sheet, so the page
+   keeps showing what it moved away from. */
+.eventLineWas {
+  color: var(--mut);
+}
 
 /* The race clock rides along. Once the legend above it scrolls away this bar
    pins to the top of the viewport, so a spectator halfway down the stations
@@ -138,6 +144,46 @@
 .statusClock {
   font-variant-numeric: tabular-nums;
 }
+/* The second clock. The race clock above it never resets; this one restarts at
+   zero on every mark, so the bar answers "how long has she been on the stretch
+   she's on right now?" without anyone doing subtraction. It stays in the bar
+   when pinned — that is the whole reason it exists — and only shrinks. */
+.segClock {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.45rem;
+  margin-top: 0.3rem;
+  padding-top: 0.3rem;
+  border-top: 1px dashed var(--line);
+  font-size: 0.74rem;
+  color: var(--mut);
+}
+.statusBarStuck .segClock {
+  margin-top: 0.22rem;
+  padding-top: 0.22rem;
+  font-size: 0.7rem;
+}
+.segClockLabel b {
+  color: var(--ink);
+  font-weight: 700;
+}
+.segClockTime {
+  font-size: 1.02rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.statusBarStuck .segClockTime {
+  font-size: 0.94rem;
+}
+.segClockGoal {
+  font-variant-numeric: tabular-nums;
+}
+.segClockGoal b {
+  font-weight: 800;
+}
+
 /* Sub-line and standing tag. Stacked normally; once the bar pins they share a
    single wrapping row, because a pinned bar that grows a third line defeats the
    point of pinning it. */
@@ -200,6 +246,91 @@
 .statusBarStuck .standingThru {
   display: none;
 }
+/* The gun was corrected. This stays in the bar for the rest of the race,
+   pinned included, because without it the race clock just looks wrong to
+   anyone who read the heat sheet. */
+.startShift {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.35rem;
+  padding: 0.25rem 0.45rem;
+  border: 1px dashed var(--ketch);
+  border-radius: 8px 8px 2px 8px;
+  font-size: 0.7rem;
+  color: var(--mut);
+}
+.startShift b {
+  color: var(--ketch);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.startShiftDelta {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.statusBarStuck .startShift {
+  margin-top: 0.25rem;
+  font-size: 0.66rem;
+}
+/* The one number that matters survives the pin; the parenthetical doesn't. */
+.statusBarStuck .startShiftDelta {
+  display: none;
+}
+.startShiftBtn {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 8px 8px 2px 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+}
+
+/* The way in, before anything is corrected. Deliberately a plain underlined
+   line of text, not a button: it is a rare action and nothing about it should
+   invite a curious thumb. */
+.startFixLink {
+  display: inline-block;
+  margin-top: 0.35rem;
+  padding: 0.1rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--mut);
+  font: inherit;
+  font-size: 0.68rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.statusBarStuck .startFixLink {
+  display: none;
+}
+.startErrBar {
+  margin-top: 0.35rem;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--ketch);
+  border-radius: 8px 8px 2px 8px;
+  color: var(--ketch);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.startErrBar button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0 0.2rem;
+}
+
 /* Only ever visible while ?now= / ?start= are in play. Those live in the URL,
    so they are true for this browser and nobody else's — worth saying out loud,
    because a simulated clock next to a shared board is genuinely confusing. */
@@ -461,6 +592,231 @@
   padding: 0.4rem 0.8rem;
   cursor: pointer;
   min-height: 36px;
+}
+
+/* "Are you sure?" on Edit. A settled mark is race data somebody stood at a
+   barrier to capture, so re-opening it takes a deliberate second tap — and the
+   dismissive options (backdrop, Escape, the focused button) all change nothing. */
+.confirmBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.45);
+}
+.confirmBox {
+  width: 100%;
+  max-width: 21rem;
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 16px 16px 4px 16px;
+  box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.6);
+  padding: 0.9rem 1rem 0.85rem;
+}
+.confirmTitle {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.confirmBody {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  color: var(--mut);
+}
+.confirmBody b {
+  color: var(--ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.confirmActions {
+  display: flex;
+  gap: 0.45rem;
+  margin-top: 0.9rem;
+}
+.confirmKeep,
+.confirmGo {
+  flex: 1;
+  border-radius: 10px 10px 3px 10px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  min-height: 44px;
+}
+.confirmKeep {
+  border: 0;
+  background: var(--ink);
+  color: var(--paper);
+}
+.confirmGo {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+}
+.confirmKeep:focus-visible,
+.confirmGo:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.confirmGo:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+/* The button that actually rewrites the board. The only red button on the
+   page, and it only ever appears on a dialog's second screen. */
+.confirmDanger {
+  border-color: var(--ketch);
+  color: var(--ketch);
+  font-weight: 800;
+}
+
+/* Fixing a late gun. Taller than the Edit confirm because it has to show what
+   the change does — the new gun, the first checkpoint and the finish — before
+   anyone commits to it. */
+.startBox {
+  max-width: 23rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+.startQuick {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.7rem;
+}
+.startQuick button {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 9px 9px 3px 9px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 0.4rem 0.1rem;
+  cursor: pointer;
+  min-height: 40px;
+}
+.startField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.55rem;
+}
+.startField > span {
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mut);
+  font-weight: 700;
+}
+.startPreview {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 10px 10px 3px 10px;
+  background: var(--chipt);
+}
+.startPreviewGun i {
+  display: block;
+  font-style: normal;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mut);
+}
+.startPreviewGun b {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.startPreviewGun u {
+  display: block;
+  text-decoration: none;
+  font-size: 0.66rem;
+  color: var(--mut);
+  font-variant-numeric: tabular-nums;
+}
+.startPreviewRows {
+  margin-top: 0.4rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--line);
+  font-size: 0.72rem;
+}
+.startPreviewRows > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.startPreviewRows span {
+  color: var(--mut);
+}
+.startPreviewRows b {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.startErr,
+.startWarn {
+  margin: 0.55rem 0 0;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px 8px 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.startErr {
+  border: 1px solid var(--ketch);
+  color: var(--ketch);
+}
+.startWarn {
+  border: 1px dashed var(--line);
+  color: var(--mut);
+}
+/* The big read-only number on the confirm screen — the thing to check against
+   the announcer before committing. */
+.startBig {
+  margin-top: 0.7rem;
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.startBigSub {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--mut);
+  font-variant-numeric: tabular-nums;
+}
+.startResetLink {
+  display: block;
+  width: 100%;
+  margin-top: 0.6rem;
+  border: 0;
+  background: transparent;
+  color: var(--mut);
+  font: inherit;
+  font-size: 0.72rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  padding: 0.35rem 0;
+}
+.startQuick button:focus-visible,
+.startShiftBtn:focus-visible,
+.startFixLink:focus-visible,
+.startResetLink:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
 }
 
 /* Actual split readout — same chip language as .targets, but for real times */
