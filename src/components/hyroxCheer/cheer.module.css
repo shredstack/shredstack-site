@@ -138,6 +138,46 @@
 .statusClock {
   font-variant-numeric: tabular-nums;
 }
+/* The second clock. The race clock above it never resets; this one restarts at
+   zero on every mark, so the bar answers "how long has she been on the stretch
+   she's on right now?" without anyone doing subtraction. It stays in the bar
+   when pinned — that is the whole reason it exists — and only shrinks. */
+.segClock {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.45rem;
+  margin-top: 0.3rem;
+  padding-top: 0.3rem;
+  border-top: 1px dashed var(--line);
+  font-size: 0.74rem;
+  color: var(--mut);
+}
+.statusBarStuck .segClock {
+  margin-top: 0.22rem;
+  padding-top: 0.22rem;
+  font-size: 0.7rem;
+}
+.segClockLabel b {
+  color: var(--ink);
+  font-weight: 700;
+}
+.segClockTime {
+  font-size: 1.02rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.statusBarStuck .segClockTime {
+  font-size: 0.94rem;
+}
+.segClockGoal {
+  font-variant-numeric: tabular-nums;
+}
+.segClockGoal b {
+  font-weight: 800;
+}
+
 /* Sub-line and standing tag. Stacked normally; once the bar pins they share a
    single wrapping row, because a pinned bar that grows a third line defeats the
    point of pinning it. */
@@ -461,6 +501,78 @@
   padding: 0.4rem 0.8rem;
   cursor: pointer;
   min-height: 36px;
+}
+
+/* "Are you sure?" on Edit. A settled mark is race data somebody stood at a
+   barrier to capture, so re-opening it takes a deliberate second tap — and the
+   dismissive options (backdrop, Escape, the focused button) all change nothing. */
+.confirmBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.45);
+}
+.confirmBox {
+  width: 100%;
+  max-width: 21rem;
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 16px 16px 4px 16px;
+  box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.6);
+  padding: 0.9rem 1rem 0.85rem;
+}
+.confirmTitle {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.confirmBody {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  color: var(--mut);
+}
+.confirmBody b {
+  color: var(--ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.confirmActions {
+  display: flex;
+  gap: 0.45rem;
+  margin-top: 0.9rem;
+}
+.confirmKeep,
+.confirmGo {
+  flex: 1;
+  border-radius: 10px 10px 3px 10px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  min-height: 44px;
+}
+.confirmKeep {
+  border: 0;
+  background: var(--ink);
+  color: var(--paper);
+}
+.confirmGo {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+}
+.confirmKeep:focus-visible,
+.confirmGo:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
 }
 
 /* Actual split readout — same chip language as .targets, but for real times */

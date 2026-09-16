@@ -173,6 +173,8 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
   // Segments the viewer has deliberately re-opened for editing. Local to this
   // browser and this visit — it's an "are you sure", not shared state.
   const [unlocked, setUnlocked] = useState<Record<number, boolean>>({});
+  // Segment index whose Edit button was tapped and is waiting on a confirm.
+  const [confirmEdit, setConfirmEdit] = useState<number | null>(null);
   const noteTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
   // Anything typed or tapped locally is held here until the server echoes the
@@ -255,6 +257,14 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
 
   function markNow(i: number) {
     setMarkedAt(i, now.toISOString());
+    // A fresh mark settles immediately. Matters for the one path that can reach
+    // this button while the card is open for editing: clearing a mark with the
+    // × and then re-marking it.
+    setUnlocked((prev) => {
+      const next = { ...prev };
+      delete next[i];
+      return next;
+    });
   }
 
   function clearAt(i: number) {
@@ -300,6 +310,7 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     setMarks({});
     setNoteDrafts({});
     setUnlocked({});
+    setConfirmEdit(null);
     try {
       await fetch(`/api/hyrox/cheer/${race.slug}`, { method: 'DELETE' });
     } catch {
@@ -357,13 +368,13 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
   const raceStanding = lastSplit ? standingAt(lastSplit.elapsedSec, lastSplit.index) : null;
 
   /**
-   * A marked segment she has already moved on from. Still correctable — the Edit
-   * button on the card puts the controls back — just not with one stray tap.
+   * A segment that has been marked. The moment a time lands it goes read-only —
+   * including the one she just finished, which used to keep a live "Re-mark"
+   * button sitting under a spectator's thumb on a scrolling phone. Still
+   * correctable: Edit (behind a confirm) puts the controls back with the
+   * existing time already in them.
    */
-  const isSettled = useCallback(
-    (i: number) => Boolean(marks[i]?.markedAt) && i < lastMarkedIndex,
-    [marks, lastMarkedIndex]
-  );
+  const isSettled = useCallback((i: number) => Boolean(marks[i]?.markedAt), [marks]);
 
   // The clock bar pins to the top of the viewport once the legend above it
   // scrolls away. A 1px sentinel just above it tells us when that has happened,
@@ -379,6 +390,21 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     io.observe(el);
     return () => io.disconnect();
   }, []);
+
+  // The Edit confirm. Focus lands on "Keep it" and Escape / a backdrop tap both
+  // cancel, so every cheap way out of this dialog is the one that changes
+  // nothing — an accidental Edit tap should cost a spectator one more tap, not
+  // a split.
+  const keepItRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (confirmEdit === null) return;
+    keepItRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setConfirmEdit(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [confirmEdit]);
 
   const [copied, setCopied] = useState(false);
   async function copySplits() {
@@ -412,6 +438,7 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
   // replaces it once the bar pins to the top of the viewport, where a
   // three-line sentence would eat half a phone screen on every card.
   const diffSec = (now.getTime() - startInstant.getTime()) / 1000;
+  const raceLive = diffSec >= 0 && diffSec < totalPlan + 900;
   let statusMain: string;
   let statusSub: React.ReactNode;
   let statusSubStuck: React.ReactNode;
@@ -484,6 +511,40 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     );
   }
 
+  /**
+   * The second clock. The race clock above never resets; this one restarts from
+   * zero on every mark, so the bar answers both "how long has she been racing?"
+   * and "how long has she been on the stretch she's on right now?" — the second
+   * one measured against that single segment's own target, not the race's.
+   *
+   * Its zero is the last mark anyone logged (the gun, before the first one), so
+   * it resets for everybody the moment a mark lands, not just for whoever
+   * tapped the button.
+   */
+  const currentIndex = raceLive && lastMarkedIndex + 1 < segments.length ? lastMarkedIndex + 1 : -1;
+  const segmentClock = (() => {
+    if (currentIndex === -1) return null;
+    const seg = segments[currentIndex];
+    const fromMs = lastSplit ? lastSplit.markedInstant.getTime() : startInstant.getTime();
+    const elapsedSec = (now.getTime() - fromMs) / 1000;
+    // A mistyped mark can sit in the future. A segment clock counting up from a
+    // negative number is noise — wait for the real clock to reach it.
+    if (elapsedSec < 0) return null;
+    const remaining = seg.planSeconds - elapsedSec;
+    return {
+      name: seg.name,
+      elapsedSec,
+      planSeconds: seg.planSeconds,
+      cls:
+        elapsedSec <= seg.goldSeconds
+          ? styles.splitGood
+          : elapsedSec <= seg.planSeconds
+            ? styles.splitOk
+            : styles.splitOff,
+      note: remaining >= 0 ? `${formatMinSec(remaining)} left` : `${formatDelta(-remaining)} over`,
+    };
+  })();
+
   // ?now= / ?start= live in this browser's URL, so a viewer running one sees a
   // different clock from everyone else on the same shared board. Say so.
   const simulating =
@@ -532,6 +593,20 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
       <div className={`${styles.statusBar} ${stuck ? styles.statusBarStuck : ''}`}>
         <div className={styles.status}>
           <div className={styles.statusMain}>{statusMain}</div>
+          {segmentClock && (
+            <div className={styles.segClock}>
+              <span className={styles.segClockLabel}>
+                On <b>{segmentClock.name}</b>
+              </span>
+              <b className={`${styles.segClockTime} ${segmentClock.cls}`}>
+                {formatMinSec(segmentClock.elapsedSec)}
+              </b>
+              <span className={styles.segClockGoal}>
+                plan {formatMinSec(segmentClock.planSeconds)} &middot;{' '}
+                <b className={segmentClock.cls}>{segmentClock.note}</b>
+              </span>
+            </div>
+          )}
           <div className={styles.statusRow}>
             <div className={styles.statusSub}>{stuck ? statusSubStuck : statusSub}</div>
             {raceStanding && (
@@ -615,7 +690,8 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
                     type="button"
                     className={styles.editBtn}
                     aria-label={`Edit the marked time for ${seg.name}`}
-                    onClick={() => setUnlocked((prev) => ({ ...prev, [i]: true }))}
+                    aria-haspopup="dialog"
+                    onClick={() => setConfirmEdit(i)}
                   >
                     Edit
                   </button>
@@ -623,14 +699,19 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
               ) : (
                 <>
                   <div className={styles.log}>
-                    <button
-                      type="button"
-                      className={styles.markBtn}
-                      aria-busy={isSaving}
-                      onClick={() => markNow(i)}
-                    >
-                      {isSaving ? 'Saving…' : markedInstant ? 'Re-mark' : 'Mark now'}
-                    </button>
+                    {/* Only ever offered on a segment with no time on it. Once
+                        one lands, the way to change it is Edit → confirm →
+                        adjust the prefilled time, never a one-tap overwrite. */}
+                    {!markedInstant && (
+                      <button
+                        type="button"
+                        className={styles.markBtn}
+                        aria-busy={isSaving}
+                        onClick={() => markNow(i)}
+                      >
+                        {isSaving ? 'Saving…' : 'Mark now'}
+                      </button>
+                    )}
                     <input
                       className={styles.atInput}
                       type="time"
@@ -842,8 +923,15 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
           the race, so cheer freely.
         </p>
         <p>
-          Once she&rsquo;s past a segment its mark locks so a stray tap can&rsquo;t overwrite it.
-          Got one wrong? Tap <b>Edit</b> on that card to correct the time, then <b>Done</b>.
+          The clock bar carries two clocks: the <b>race clock</b>, which runs from her gun and
+          never resets, and underneath it the <b>segment clock</b>, which restarts at zero every
+          time someone marks a segment &mdash; that one is how long she has been on the stretch
+          she&rsquo;s on right now, against that segment&rsquo;s own target.
+        </p>
+        <p>
+          A mark locks the moment it lands, so a stray tap can&rsquo;t overwrite it. Got one wrong?
+          Tap <b>Edit</b> on that card and confirm; the time you already logged stays filled in for
+          you to adjust, then tap <b>Done</b>.
         </p>
         <p className={styles.fine}>
           Times assume the wave goes off at{' '}
@@ -865,6 +953,55 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
           <ICONS.nugget size={18} />
         </div>
       </footer>
+
+      {confirmEdit !== null && (
+        <div
+          className={styles.confirmBackdrop}
+          onClick={() => setConfirmEdit(null)}
+          role="presentation"
+        >
+          <div
+            className={styles.confirmBox}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cheerConfirmTitle"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className={styles.confirmTitle} id="cheerConfirmTitle">
+              Edit {segments[confirmEdit].name}?
+            </h2>
+            <p className={styles.confirmBody}>
+              It&rsquo;s marked at{' '}
+              <b>
+                {marks[confirmEdit]?.markedAt
+                  ? clockOf(new Date(marks[confirmEdit]!.markedAt!))
+                  : '—'}
+              </b>
+              . Nothing gets erased &mdash; that time stays filled in and you can adjust it.
+            </p>
+            <div className={styles.confirmActions}>
+              <button
+                type="button"
+                ref={keepItRef}
+                className={styles.confirmKeep}
+                onClick={() => setConfirmEdit(null)}
+              >
+                Keep it
+              </button>
+              <button
+                type="button"
+                className={styles.confirmGo}
+                onClick={() => {
+                  setUnlocked((prev) => ({ ...prev, [confirmEdit]: true }));
+                  setConfirmEdit(null);
+                }}
+              >
+                Yes, edit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {testMode && (
         <TestPanel
