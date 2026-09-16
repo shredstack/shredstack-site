@@ -1,9 +1,11 @@
 // HYROX Salt Lake City — Sarah's race.
 //
-// RACE.locked gates the test panel and the ?start=/?now= URL overrides.
-// TODO(lock): flip `locked` to true before race week (start is Fri 9/18/2026,
-// so this must ship locked well before then — the test panel and time
-// overrides are for Sarah's own testing only).
+// RACE.locked gates the test panel, the ?start=/?now= URL overrides, and the
+// "clear all marks" wipe. See lib/hyroxCheer/testMode.ts: all three also switch
+// off on their own two hours before the gun, so forgetting this flag can't cost
+// Sarah her race data or show a spectator a simulated clock.
+// TODO(lock): still flip `locked` to true before race week (start is Fri
+// 9/18/2026) — the time window is the safety net, not the plan.
 export const RACE = {
   slug: 'slc-2026',
   athleteName: 'SARAH',

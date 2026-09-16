@@ -93,25 +93,127 @@
   color: var(--ink);
 }
 
+/* The race clock rides along. Once the legend above it scrolls away this bar
+   pins to the top of the viewport, so a spectator halfway down the stations
+   still knows what the clock reads. The masthead deliberately does NOT pin —
+   only this. `.statusSentinel` is what the component watches to know when the
+   bar has stuck, so it can shrink itself and drop a shadow. */
+.statusSentinel {
+  height: 1px;
+}
+.statusBar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: 0.5rem 1rem 0.55rem;
+  /* Opaque: cards scroll underneath this. */
+  background: var(--paper);
+  transition: padding 0.15s ease;
+}
+.statusBarStuck {
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 8px 14px -12px rgba(0, 0, 0, 0.55);
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+}
 .status {
-  margin: 0.85rem 1rem 0;
   padding: 0.8rem 0.9rem;
   border-radius: 14px 14px 4px 14px;
   background: var(--card);
   border: 1px solid var(--line);
 }
+.statusBarStuck .status {
+  padding: 0.5rem 0.7rem;
+  border-radius: 12px 12px 3px 12px;
+}
 .statusMain {
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.statusBarStuck .statusMain {
+  font-size: 1.02rem;
+}
+.statusClock {
+  font-variant-numeric: tabular-nums;
+}
+/* Sub-line and standing tag. Stacked normally; once the bar pins they share a
+   single wrapping row, because a pinned bar that grows a third line defeats the
+   point of pinning it. */
+.statusRow {
+  margin-top: 0.18rem;
+}
+.statusBarStuck .statusRow {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 .statusSub {
   font-size: 0.8rem;
   color: var(--mut);
-  margin-top: 0.18rem;
 }
-.statusClock {
+.statusBarStuck .statusSub {
+  font-size: 0.74rem;
+}
+
+/* How the race is actually going, cumulatively — the number that answers "is
+   she OK?". It lives in the pinned bar so it is never more than a glance away,
+   and it uses the same gold/teal language as the two goal lines in the legend:
+   gold = inside the dream-day line, teal = on the plan. A single slow segment
+   does not change it. */
+.standing {
+  display: inline-block;
+  padding: 0.16rem 0.5rem;
+  border-radius: 8px 8px 2px 8px;
+  font-size: 0.74rem;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.statusRow > .standing {
+  margin-top: 0.3rem;
+}
+.statusBarStuck .statusRow > .standing {
+  margin-top: 0;
+  font-size: 0.7rem;
+}
+.standingGold {
+  background: var(--chipg);
+  color: var(--ink);
+}
+.standingPlan {
+  background: var(--chipt);
+  color: var(--ink);
+}
+/* Deliberately quiet, matching .deltaBehind: behind the plan is information,
+   not an alarm — she is still racing and people are still cheering. */
+.standingBehind {
+  border: 1px dashed var(--line);
+  color: var(--mut);
+}
+.standingThru {
+  font-weight: 700;
+  color: var(--mut);
+}
+.statusBarStuck .standingThru {
+  display: none;
+}
+/* Only ever visible while ?now= / ?start= are in play. Those live in the URL,
+   so they are true for this browser and nobody else's — worth saying out loud,
+   because a simulated clock next to a shared board is genuinely confusing. */
+.simBadge {
+  display: inline-block;
+  margin-top: 0.35rem;
+  padding: 0.12rem 0.4rem;
+  border: 1px dashed var(--ketch);
+  border-radius: 7px 7px 2px 7px;
+  color: var(--ketch);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .key {
@@ -301,6 +403,66 @@
   min-height: 44px;
 }
 
+/* Seconds matter here — a native <input type="time"> hides them on iOS, so the
+   marked instant is always spelled out in full underneath the controls. */
+.markedAt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+  font-size: 0.74rem;
+  color: var(--mut);
+}
+.markedAt b {
+  color: var(--ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A segment she has already run past. Its mark is settled, so the controls are
+   replaced by a readout: one stray thumb on a scrolling phone should not be
+   able to overwrite a split that already happened. Edit puts them back. */
+.logLocked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 0.65rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px dashed var(--line);
+  border-radius: 10px 10px 3px 10px;
+}
+.lockedAt i {
+  display: block;
+  font-style: normal;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mut);
+}
+.lockedAt b {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.05rem;
+}
+.editBtn,
+.doneBtn {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 9px 9px 3px 9px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  min-height: 36px;
+}
+
 /* Actual split readout — same chip language as .targets, but for real times */
 .splitRow {
   display: flex;
@@ -470,6 +632,8 @@
 .note:focus,
 .markBtn:focus-visible,
 .clearBtn:focus-visible,
+.editBtn:focus-visible,
+.doneBtn:focus-visible,
 .copyBtn:focus-visible,
 .resetBtn:focus-visible {
   outline: 2px solid var(--gold);
