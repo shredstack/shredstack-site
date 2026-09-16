@@ -349,6 +349,27 @@ export const hyroxCheerMarks = pgTable('hyrox_cheer_marks', {
   uniqueIndex('hyrox_cheer_marks_race_segment_idx').on(table.raceSlug, table.segmentIndex),
 ]);
 
+/**
+ * One row per race, for the board-wide facts that aren't about a single
+ * segment. Today that is exactly one: the real start time.
+ *
+ * A wave that goes off late makes every derived number on the cheer page wrong
+ * by the same amount, so a spectator can correct the gun for everyone watching.
+ * Null `start_override_at` means "use the scheduled startISO from the race
+ * config" — the row may exist with a null in it after someone resets it, and
+ * that is the same thing as no row at all.
+ */
+export const hyroxCheerRaceState = pgTable('hyrox_cheer_race_state', {
+  id: serial('id').primaryKey(),
+  raceSlug: varchar('race_slug', { length: 100 }).notNull(),
+  // Absolute instant, same as marked_at — displayed clock time is derived from
+  // it in the race's timeZone, so it reads correctly for spectators anywhere.
+  startOverrideAt: timestamp('start_override_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('hyrox_cheer_race_state_race_idx').on(table.raceSlug),
+]);
+
 // Type exports for use in application code
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type NewBlogPost = typeof blogPosts.$inferInsert;
@@ -380,3 +401,5 @@ export type MobilityCompletion = typeof mobilityCompletions.$inferSelect;
 export type NewMobilityCompletion = typeof mobilityCompletions.$inferInsert;
 export type HyroxCheerMark = typeof hyroxCheerMarks.$inferSelect;
 export type NewHyroxCheerMark = typeof hyroxCheerMarks.$inferInsert;
+export type HyroxCheerRaceState = typeof hyroxCheerRaceState.$inferSelect;
+export type NewHyroxCheerRaceState = typeof hyroxCheerRaceState.$inferInsert;

@@ -120,6 +120,13 @@
       "when": 1789501205373,
       "tag": "0016_add-hyrox-cheer-marks",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789572699778,
+      "tag": "0017_add-hyrox-cheer-race-state",
+      "breakpoints": true
     }
   ]
 }
