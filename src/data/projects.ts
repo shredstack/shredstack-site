@@ -178,6 +178,19 @@ export const projects: Project[] = [
     gradient: "from-rainbow-purple to-rainbow-indigo",
   },
   {
+    id: "data-intelligence-mcp-server",
+    name: "Data Intelligence MCP Server",
+    description:
+      "Production remote MCP server that lets Claude answer natural-language questions over Locumsmart's healthcare-staffing data warehouse — for internal teams via claude.ai and for external customers inside the Locumsmart app, under strict per-user data permissions.",
+    longDescription:
+      "Designed and built the data-access layer behind Locumsmart's conversational analytics, treating a confidently wrong answer — not downtime or access — as the primary risk to guard against. Claude must externalize its interpretation of a question before any query runs, business terminology and metric definitions live in a governed semantic layer that analysts edit directly rather than in code, and a library of pre-approved queries plus deterministic metric compilation keep repeated questions answered consistently. Per-user data access is enforced natively in the warehouse via row-level security policies — no per-user database credentials required — layered underneath SSO authentication. A full observability pipeline audits every interaction and feeds accuracy dashboards and an LLM-as-judge review process, so the system measures and improves its own correctness over time.",
+    techStack: ["Python", "Model Context Protocol", "Snowflake", "AWS ECS Fargate", "OAuth 2.1 / Okta SSO", "dbt"],
+    category: "professional",
+    featured: true,
+    status: "Professional",
+    gradient: "from-rainbow-teal to-rainbow-orange",
+  },
+  {
     id: "smart-insights",
     name: "Smart Insights",
     description:
