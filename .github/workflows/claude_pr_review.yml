@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
   issues: write
 
 # Only review the newest push on a PR; cancel superseded runs so rapid
