@@ -28,6 +28,15 @@ export const RACE = {
   planLabel: '1:08',
   /** Race day. No test panel, no ?now=/?start=, no wiping the board. */
   locked: true,
+  /**
+   * The marks below are now Sarah's official result, backfilled from
+   * https://www.hyresult.com/result/LR3MS4JI588B9C — not something a
+   * spectator marked live. Once true, the card stops offering the per-segment
+   * Edit control (nothing left to correct) and stops ticking a live clock
+   * (there's no "now" left to count towards). Split math and the race-plan
+   * comparisons are unaffected.
+   */
+  resultsFinal: true,
 } as const;
 
 export type RaceConfig = typeof RACE;

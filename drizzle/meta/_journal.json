@@ -127,6 +127,13 @@
       "when": 1789572699778,
       "tag": "0017_add-hyrox-cheer-race-state",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790110553898,
+      "tag": "0018_add-hyrox-cheer-mark-work-seconds",
+      "breakpoints": true
     }
   ]
 }
