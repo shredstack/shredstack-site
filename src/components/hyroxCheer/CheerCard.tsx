@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import styles from './cheer.module.css';
 import { ICONS } from './icons';
@@ -23,9 +24,13 @@ import {
 interface MarkRecord {
   markedAt: string | null;
   note: string | null;
+  workSeconds: number | null;
 }
 
-function useSimulatedNow(testMode: boolean, searchParams: URLSearchParams): Date {
+// `ticking: false` is for a race whose results are already final — nothing on
+// the page reads a live "now" for it, so re-rendering every second would just
+// burn battery on every phone that still has the page open.
+function useSimulatedNow(testMode: boolean, searchParams: URLSearchParams, ticking: boolean): Date {
   const nowParam = testMode ? searchParams.get('now') : null;
   const lastParamRef = useRef<string | null>(null);
   const baseRef = useRef<{ simBase: number; realBase: number } | null>(null);
@@ -42,9 +47,10 @@ function useSimulatedNow(testMode: boolean, searchParams: URLSearchParams): Date
   }
 
   useEffect(() => {
+    if (!ticking) return;
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [ticking]);
 
   if (baseRef.current) {
     return new Date(baseRef.current.simBase + (Date.now() - baseRef.current.realBase));
@@ -57,7 +63,7 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
   // Real wall clock, deliberately not `now` — a ?now= in the URL must not be
   // able to argue the page back into test mode once race day arrives.
   const testMode = testModeActive(race, Date.now());
-  const now = useSimulatedNow(testMode, searchParams);
+  const now = useSimulatedNow(testMode, searchParams, !race.resultsFinal);
 
   useEffect(() => {
     if (testMode) {
@@ -330,7 +336,11 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
   );
 
   function setMarkedAt(i: number, iso: string | null) {
-    const record: MarkRecord = { markedAt: iso, note: marks[i]?.note ?? null };
+    const record: MarkRecord = {
+      markedAt: iso,
+      note: marks[i]?.note ?? null,
+      workSeconds: marks[i]?.workSeconds ?? null,
+    };
     applyLocal(i, record);
     postMark(i, { markedAt: iso });
   }
@@ -380,7 +390,11 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
     setNoteDrafts((prev) => ({ ...prev, [i]: value }));
     clearTimeout(noteTimers.current[i]);
     noteTimers.current[i] = setTimeout(() => {
-      applyLocal(i, { markedAt: marks[i]?.markedAt ?? null, note: value });
+      applyLocal(i, {
+        markedAt: marks[i]?.markedAt ?? null,
+        note: value,
+        workSeconds: marks[i]?.workSeconds ?? null,
+      });
       postMark(i, { note: value });
     }, 350);
   }
@@ -423,15 +437,26 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
         goalPlan += segments[j].planSeconds;
       }
       const splitSec = (markedInstant.getTime() - prevMs) / 1000;
+      const outOfOrder = splitSec < 0;
+      // The work/roxzone breakdown only makes sense against this segment's own
+      // split — not one that also swallowed earlier unmarked segments (coversFrom
+      // !== i) or reads negative. workSeconds itself is never set for a segment
+      // whose station timing mats didn't produce a trustworthy number (see the
+      // backfill script) — it's simply absent there, same as an unmarked segment.
+      const workSeconds = marks[i]?.workSeconds ?? null;
+      const roxzoneSec =
+        workSeconds !== null && !outOfOrder && coversFrom === i ? splitSec - workSeconds : null;
       const row = {
         index: i,
         markedInstant,
         elapsedSec: (markedInstant.getTime() - startInstant.getTime()) / 1000,
         splitSec,
-        outOfOrder: splitSec < 0,
+        outOfOrder,
         coversFrom,
         goalGold,
         goalPlan,
+        workSeconds: roxzoneSec !== null ? workSeconds : null,
+        roxzoneSec,
       };
       prevMs = markedInstant.getTime();
       prevIndex = i;
@@ -638,7 +663,20 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
   let statusSubStuck: React.ReactNode;
   let nextIndex: number | null = null;
 
-  if (diffSec < -86400) {
+  // Official results, backfilled after the fact — there's no "now" left to
+  // count towards, so this branch never depends on the ticking clock below,
+  // unlike every other branch here.
+  if (race.resultsFinal) {
+    statusMain = 'Race finished';
+    statusSub = lastSplit ? (
+      <>
+        Official time <b>{formatMinSec(lastSplit.elapsedSec)}</b>.
+      </>
+    ) : (
+      'These are her final splits.'
+    );
+    statusSubStuck = statusSub;
+  } else if (diffSec < -86400) {
     const days = Math.floor(-diffSec / 86400);
     statusMain = `${days} day${days === 1 ? '' : 's'} until she starts`;
     statusSub = (
@@ -747,6 +785,12 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
   return (
     <div className={styles.page}>
       <header className={styles.header}>
+        {/* This page runs chromeless (see ConditionalChrome) so it can be a
+            full-bleed phone card on race day — the only way back to the rest
+            of the site is this link. */}
+        <Link href="/" className={styles.backLink}>
+          &larr; shredstack.net
+        </Link>
         <div className={styles.plate}>
           <ICONS.dino size={46} />
           <div>
@@ -938,15 +982,20 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
                     <i>Marked</i>
                     <b>{markedInstant ? clockOf(markedInstant) : '—'}</b>
                   </span>
-                  <button
-                    type="button"
-                    className={styles.editBtn}
-                    aria-label={`Edit the marked time for ${seg.name}`}
-                    aria-haspopup="dialog"
-                    onClick={() => setConfirmEdit(i)}
-                  >
-                    Edit
-                  </button>
+                  {/* These marks are the official result now, backfilled from
+                      hyresult — not a spectator's live tap. Nothing left to
+                      correct, so there's no Edit control for this race. */}
+                  {!race.resultsFinal && (
+                    <button
+                      type="button"
+                      className={styles.editBtn}
+                      aria-label={`Edit the marked time for ${seg.name}`}
+                      aria-haspopup="dialog"
+                      onClick={() => setConfirmEdit(i)}
+                    >
+                      Edit
+                    </button>
+                  )}
                 </div>
               ) : (
                 <>
@@ -1044,6 +1093,24 @@ export function CheerCard({ race, segments }: { race: RaceConfig; segments: Segm
                       <u>{standing ? standing.short : 'overall'}</u>
                     </span>
                   </div>
+                  {/* Only ever set by the post-race backfill from the official
+                      result (see the schema comment on work_seconds) — never
+                      something a spectator marked, so it's a bonus breakdown of
+                      the Split above, not a replacement for it. */}
+                  {split.workSeconds !== null && split.roxzoneSec !== null && (
+                    <div className={styles.splitRow}>
+                      <span className={styles.splitCell}>
+                        <i>Work</i>
+                        <b>{formatMinSec(split.workSeconds)}</b>
+                        <u>station reps only</u>
+                      </span>
+                      <span className={styles.splitCell}>
+                        <i>Roxzone</i>
+                        <b>{formatMinSec(split.roxzoneSec)}</b>
+                        <u>queue + transition</u>
+                      </span>
+                    </div>
+                  )}
                   {bankedThrough && standing && (
                     <div className={styles.splitNote}>
                       Slower than plan on this segment &mdash; but she banked enough earlier that

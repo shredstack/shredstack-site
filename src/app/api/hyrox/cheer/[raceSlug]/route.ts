@@ -30,11 +30,15 @@ export async function GET(
       .where(eq(hyroxCheerRaceState.raceSlug, raceSlug)),
   ]);
 
-  const marks: Record<number, { markedAt: string | null; note: string | null }> = {};
+  const marks: Record<
+    number,
+    { markedAt: string | null; note: string | null; workSeconds: number | null }
+  > = {};
   for (const row of rows) {
     marks[row.segmentIndex] = {
       markedAt: row.markedAt ? row.markedAt.toISOString() : null,
       note: row.note,
+      workSeconds: row.workSeconds,
     };
   }
 

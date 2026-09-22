@@ -1,0 +1,1 @@
+ALTER TABLE "hyrox_cheer_marks" ADD COLUMN "work_seconds" integer;

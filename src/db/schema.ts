@@ -344,6 +344,12 @@ export const hyroxCheerMarks = pgTable('hyrox_cheer_marks', {
   // reads correctly for spectators in any timezone
   markedAt: timestamp('marked_at', { withTimezone: true }),
   note: text('note'),
+  // How much of this split was the station's own work reps, in seconds — the
+  // rest of the split is roxzone/queue time. Only meaningful for station
+  // segments, and only ever backfilled from an official result after a race is
+  // over: live spectators have no reliable way to mark this mid-race, so the
+  // normal mark/edit flow never touches it.
+  workSeconds: integer('work_seconds'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   uniqueIndex('hyrox_cheer_marks_race_segment_idx').on(table.raceSlug, table.segmentIndex),

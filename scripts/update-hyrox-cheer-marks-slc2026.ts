@@ -14,7 +14,7 @@
  */
 
 import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
+dotenv.config({ path: process.env.ENV_FILE || '.env.local' });
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { and, eq } from 'drizzle-orm';
