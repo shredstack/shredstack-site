@@ -27,7 +27,8 @@ const liveExperiments = [
     name: "HYROX Training Tracker",
     description:
       "Track your 24-week sub-60 HYROX training plan — log runs, station skills, benchmark times, and see your estimated race finish.",
-    icon: "\u{1F3C3}\u200D\u2640\uFE0F",
+    // eslint-disable-next-line @next/next/no-img-element
+    icon: <img src="/hyrox-emoji.svg" alt="" className="w-10 h-10" />,
     gradient: "from-rainbow-orange to-rainbow-pink",
     href: "/playground/hyrox-tracker",
   },

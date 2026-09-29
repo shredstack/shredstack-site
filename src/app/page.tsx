@@ -101,22 +101,8 @@ export default function Home() {
               { icon: "🧗‍♀️", label: "Rock Climbing", color: "from-rainbow-orange to-rainbow-yellow" },
               {
                 icon: (
-                  <svg
-                    className="w-8 h-8 mx-auto"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <circle cx="5" cy="4.5" r="1.5" fill="currentColor" stroke="none" />
-                    <path d="M5 6 L9 12 L7 20" />
-                    <path d="M9 12 L13 16" />
-                    <path d="M6.5 7.5 L14 10" />
-                    <rect x="14" y="8" width="6" height="4" rx="0.5" />
-                    <path d="M15 12 L15 13.5 M19 12 L19 13.5" />
-                  </svg>
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src="/hyrox-emoji.svg" alt="" className="w-9 h-9 mx-auto" />
                 ),
                 label: "Hyrox",
                 color: "from-rainbow-orange to-rainbow-pink",
