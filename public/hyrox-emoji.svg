@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Hyrox emoji: runner pushing a sled loaded with a kettlebell">
+  <style>:root{--hx-bg1:#FFE94D;--hx-bg2:#FFB400;--hx-ring:#0A0A0A;--hx-runner:#0A0A0A;--hx-sled:#0A0A0A;--hx-bell:#0A0A0A;--hx-bolt:#FFD400;--hx-dash:#0A0A0A} @media (prefers-color-scheme:dark){:root{--hx-bg1:#1E1E1E;--hx-bg2:#0B0B0B;--hx-ring:#FFD400;--hx-runner:#F4F4F4;--hx-sled:#FFD400;--hx-bell:#FFD400;--hx-bolt:#111111;--hx-dash:#FFD400}}
+  .hx-s1{stop-color:var(--hx-bg1)} .hx-s2{stop-color:var(--hx-bg2)}
+  .hx-ring{stroke:var(--hx-ring)} .hx-dash{stroke:var(--hx-dash)}
+  .hx-runner{stroke:var(--hx-runner)} .hx-runner-fill{fill:var(--hx-runner)}
+  .hx-sled{stroke:var(--hx-sled)} .hx-sled-fill{fill:var(--hx-sled)}
+  .hx-bell{stroke:var(--hx-bell)} .hx-bell-fill{fill:var(--hx-bell)}
+  .hx-bolt-fill{fill:var(--hx-bolt)}
+</style>
+  <defs>
+    <linearGradient id="hx-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" class="hx-s1"/>
+      <stop offset="1" class="hx-s2"/>
+    </linearGradient>
+  </defs>
+
+  <circle cx="64" cy="64" r="60" fill="url(#hx-bg)" class="hx-ring" stroke-width="4"/>
+  <circle cx="64" cy="64" r="52" fill="none" class="hx-dash" stroke-opacity="0.3" stroke-width="2" stroke-dasharray="3 5"/>
+
+  <g transform="translate(64 64) scale(.86) translate(-62 -64)" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- speed lines -->
+    <g class="hx-runner" stroke-width="4">
+      <line x1="6" y1="44" x2="22" y2="44"/>
+      <line x1="2" y1="56" x2="18" y2="56"/>
+    </g>
+
+    <!-- runner pushing the sled -->
+    <g class="hx-runner" stroke-width="7">
+      <polyline points="44,49 30,72"/>
+      <polyline points="30,72 20,86 8,94"/>
+      <polyline points="30,72 44,82 38,96"/>
+      <polyline points="44,49 58,55 72,58"/>
+    </g>
+    <circle cx="42" cy="36" r="8" class="hx-runner-fill" stroke="none"/>
+
+    <!-- sled -->
+    <g class="hx-sled">
+      <line x1="72" y1="84" x2="72" y2="58" stroke-width="6"/>
+      <rect x="66" y="82" width="50" height="9" rx="3" class="hx-sled-fill" stroke="none"/>
+      <path d="M60 90 Q60 98 68 98 L108 98 Q118 98 118 88" stroke-width="5"/>
+    </g>
+
+    <!-- kettlebell on the sled -->
+    <path d="M87 65 C84 40 112 40 109 65" class="hx-bell" stroke-width="5.5"/>
+    <circle cx="98" cy="69" r="14.5" class="hx-bell-fill" stroke="none"/>
+    <polygon points="101,60 92,71 97,71 94,79 104,67 99,67" class="hx-bolt-fill" stroke="none"/>
+  </g>
+</svg>
