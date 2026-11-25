@@ -110,6 +110,23 @@ export default function DisclosurePage() {
               page and link, rough country, device type). No IP addresses, no cookies, no personal info.
             </p>
             <p>
+              We also count page views with Vercel Web Analytics. Vercel says it works without third-party
+              cookies and isn&apos;t tied to any individual or IP address: visitors are identified by a hash
+              of the request, and visitor sessions are discarded after 24 hours. It tells me which pages are
+              popular and roughly where visitors come from (referring site, location, device type), never
+              who you are. Before anything is sent, the site strips page addresses of everything except a
+              short list of campaign and filter tags. See{" "}
+              <a
+                href="https://vercel.com/docs/analytics/privacy-policy"
+                className="text-accent-400 underline hover:text-accent-300"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Vercel&apos;s Web Analytics privacy page
+              </a>{" "}
+              for the details.
+            </p>
+            <p>
               Purchases and commissions are tracked by each brand&apos;s own affiliate program, not by this
               site.
             </p>
