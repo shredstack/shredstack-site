@@ -12,6 +12,7 @@ const navLinks = [
   { href: "/blog", label: "Blog" },
   { href: "/playground", label: "Playground" },
   { href: "/hyrox", label: "Hyrox" },
+  { href: "/partners", label: "Partners" },
   { href: "/pta", label: "PTA" },
   { href: "/contact", label: "Contact" },
 ];
@@ -43,7 +44,7 @@ export function Navigation() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden lg:flex items-center gap-8">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
@@ -61,7 +62,7 @@ export function Navigation() {
 
           {/* Mobile Menu Button */}
           <button
-            className="md:hidden p-2 text-surface-300 hover:text-primary-400"
+            className="lg:hidden p-2 text-surface-300 hover:text-primary-400"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             aria-label="Toggle menu"
           >
@@ -92,7 +93,7 @@ export function Navigation() {
 
         {/* Mobile Navigation */}
         {isMenuOpen && (
-          <div className="md:hidden py-4 border-t border-surface-700">
+          <div className="lg:hidden py-4 border-t border-surface-700">
             <div className="flex flex-col gap-4">
               {navLinks.map((link) => (
                 <Link

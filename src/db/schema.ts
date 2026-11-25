@@ -376,6 +376,27 @@ export const hyroxCheerRaceState = pgTable('hyrox_cheer_race_state', {
   uniqueIndex('hyrox_cheer_race_state_race_idx').on(table.raceSlug),
 ]);
 
+// ============================================================
+// AFFILIATE CLICK TRACKING
+// ============================================================
+//
+// One row per human click on a /go/<partner> redirect. Counts only:
+// explicitly NO IP address (raw or hashed), NO full user agent, NO full
+// referrer URL, NO cookies or identifiers. See /disclosure "What we log".
+
+export const affiliateClicks = pgTable('affiliate_clicks', {
+  id: serial('id').primaryKey(),
+  partnerSlug: varchar('partner_slug', { length: 100 }).notNull(),
+  productKey: varchar('product_key', { length: 100 }),
+  placement: varchar('placement', { length: 64 }).notNull().default('direct'), // the ?src= value
+  referrerHost: varchar('referrer_host', { length: 255 }), // host only, e.g. "l.instagram.com"; never the full URL
+  country: varchar('country', { length: 2 }), // from x-vercel-ip-country header
+  deviceType: varchar('device_type', { length: 10 }), // "mobile" | "tablet" | "desktop" (coarse UA parse)
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('affiliate_clicks_partner_created_idx').on(table.partnerSlug, table.createdAt),
+]);
+
 // Type exports for use in application code
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type NewBlogPost = typeof blogPosts.$inferInsert;
@@ -409,3 +430,5 @@ export type HyroxCheerMark = typeof hyroxCheerMarks.$inferSelect;
 export type NewHyroxCheerMark = typeof hyroxCheerMarks.$inferInsert;
 export type HyroxCheerRaceState = typeof hyroxCheerRaceState.$inferSelect;
 export type NewHyroxCheerRaceState = typeof hyroxCheerRaceState.$inferInsert;
+export type AffiliateClick = typeof affiliateClicks.$inferSelect;
+export type NewAffiliateClick = typeof affiliateClicks.$inferInsert;

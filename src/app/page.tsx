@@ -4,8 +4,14 @@ import {
   getFeaturedPersonalProjects,
   getFeaturedProfessionalProjects,
 } from "@/data/projects";
+import { getFeaturedPartners } from "@/data/partners";
+import { PLACEMENTS } from "@/lib/affiliate/placements";
+import { AffiliateDisclosure } from "@/components/affiliate/AffiliateDisclosure";
+import { PartnerCard } from "@/components/affiliate/PartnerCard";
 
 export default function Home() {
+  const featuredPartners = getFeaturedPartners().slice(0, 3);
+
   return (
     <div>
       {/* Hero Section */}
@@ -144,6 +150,37 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Brands I Support Section (renders nothing without featured partners) */}
+      {featuredPartners.length > 0 && (
+        <section className="py-20 bg-surface-800">
+          <div className="section-container">
+            <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-3xl font-bold text-white">Brands I Support</h2>
+                <p className="mt-2 text-surface-400 max-w-2xl">
+                  A short list of brands my family and I believe in. I&apos;ll always tell you whether
+                  we own it, have tried it, or just want it.
+                </p>
+              </div>
+              <Link
+                href="/partners"
+                className="text-accent-400 hover:text-accent-300 font-medium transition-colors"
+              >
+                See all partners &rarr;
+              </Link>
+            </div>
+
+            <AffiliateDisclosure variant="multi" className="mb-8 max-w-3xl" />
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {featuredPartners.map((partner) => (
+                <PartnerCard key={partner.slug} partner={partner} src={PLACEMENTS.home} compact />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* About Preview Section */}
       <section className="py-20 bg-surface-800 relative overflow-hidden">

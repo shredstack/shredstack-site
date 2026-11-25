@@ -11,9 +11,13 @@ import { Footer } from "./Footer";
 // normal site chrome.
 const CHROMELESS_PATTERN = /^\/hyrox\/[^/]+\/?$/;
 
+// The /links "link in bio" page is opened from Instagram/TikTok on a phone and
+// is designed as a single self-contained column, so it also skips the chrome.
+const CHROMELESS_PATHS = new Set(["/links", "/links/"]);
+
 export function ConditionalChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const chromeless = CHROMELESS_PATTERN.test(pathname);
+  const chromeless = CHROMELESS_PATTERN.test(pathname) || CHROMELESS_PATHS.has(pathname);
 
   if (chromeless) {
     return <main className="flex-1">{children}</main>;

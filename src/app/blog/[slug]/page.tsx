@@ -3,6 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, blogPosts, type BlogPost } from "@/db";
 import { eq } from "drizzle-orm";
+import { getPartner } from "@/data/partners";
+import { blogPlacement } from "@/lib/affiliate/placements";
+import { AffiliateDisclosure } from "@/components/affiliate/AffiliateDisclosure";
 
 async function getBlogPost(slug: string): Promise<BlogPost | null> {
   try {
@@ -46,8 +49,51 @@ function formatDate(date: Date | null): string {
   });
 }
 
+// Markdown link targets that point at an affiliate redirect: "/go/<partner>[/<product>]"
+// or the "go:<partner>[/<product>]" shorthand.
+const AFFILIATE_LINK_PATTERN = /\]\((?:\/go\/|go:)([^)\/?#\s]+)/g;
+
+function escapeAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * For "/go/..." (or "go:...") hrefs, return the normalized "/go/..." href with
+ * `src=blog-<post-slug>` appended when the link has no `src`. Returns null for
+ * every other href, which is left exactly as before.
+ */
+function toAffiliateHref(href: string, postSlug: string): string | null {
+  const raw = href.startsWith("go:") ? `/go/${href.slice(3)}` : href;
+  if (!raw.startsWith("/go/")) return null;
+  try {
+    // Re-serializing through URL percent-encodes quotes/brackets in the path and query.
+    const url = new URL(raw, "https://placeholder.invalid");
+    if (!url.searchParams.has("src")) {
+      url.searchParams.set("src", blogPlacement(postSlug));
+    }
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Known partners linked from the post via /go/ (or go:) links. */
+function getLinkedPartners(content: string) {
+  const slugs = new Set(Array.from(content.matchAll(AFFILIATE_LINK_PATTERN), (m) => m[1]));
+  return {
+    hasAffiliateLinks: slugs.size > 0,
+    partners: Array.from(slugs)
+      .map((slug) => getPartner(slug))
+      .filter((p): p is NonNullable<typeof p> => p !== undefined),
+  };
+}
+
 // Simple markdown-like rendering for content
-function renderContent(content: string): string {
+function renderContent(content: string, postSlug: string): string {
   return content
     // Headers
     .replace(/^### (.*$)/gim, '<h3 class="text-xl font-semibold text-white mt-8 mb-4">$1</h3>')
@@ -61,8 +107,14 @@ function renderContent(content: string): string {
     .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre class="bg-surface-800 rounded-lg p-4 my-6 overflow-x-auto"><code class="text-sm text-surface-200 font-mono">$2</code></pre>')
     // Inline code
     .replace(/`([^`]+)`/g, '<code class="bg-surface-800 px-2 py-1 rounded text-primary-400 font-mono text-sm">$1</code>')
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-primary-400 hover:text-primary-300 underline" target="_blank" rel="noopener noreferrer">$1</a>')
+    // Links (affiliate /go/ links get rel="sponsored" + a placement id; others unchanged)
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text: string, href: string) => {
+      const affiliateHref = toAffiliateHref(href, postSlug);
+      if (affiliateHref) {
+        return `<a href="${escapeAttr(affiliateHref)}" class="text-primary-400 hover:text-primary-300 underline" target="_blank" rel="sponsored noopener">${text}</a>`;
+      }
+      return `<a href="${href}" class="text-primary-400 hover:text-primary-300 underline" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    })
     // Line breaks and paragraphs
     .split('\n\n')
     .map(p => p.trim())
@@ -85,6 +137,7 @@ export default async function BlogPostPage({
 
   // Show unpublished posts but with a notice
   const isUnpublished = !post.published;
+  const affiliate = getLinkedPartners(post.content);
 
   return (
     <div className="py-16">
@@ -141,10 +194,19 @@ export default async function BlogPostPage({
           {/* Divider */}
           <div className={`h-1 w-24 bg-${post.color} rounded mb-12`} />
 
+          {/* Affiliate disclosure: required above the first affiliate link */}
+          {affiliate.hasAffiliateLinks && (
+            <AffiliateDisclosure
+              variant={affiliate.partners.length === 1 ? "single" : "multi"}
+              partner={affiliate.partners.length === 1 ? affiliate.partners[0] : undefined}
+              className="mb-10"
+            />
+          )}
+
           {/* Content */}
           <div
             className="prose prose-invert max-w-none"
-            dangerouslySetInnerHTML={{ __html: renderContent(post.content) }}
+            dangerouslySetInnerHTML={{ __html: renderContent(post.content, post.slug) }}
           />
 
           {/* Footer */}
