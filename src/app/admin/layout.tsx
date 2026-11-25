@@ -3,6 +3,8 @@
 import { useState, useEffect, ReactNode } from "react";
 import Link from "next/link";
 
+const ADMIN_PASSWORD_KEY = "admin_password";
+
 interface AdminLayoutProps {
   children: ReactNode;
 }
@@ -34,6 +36,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
       if (response.ok) {
         sessionStorage.setItem("admin_authenticated", "true");
+        // Sent as x-admin-password to APIs that verify server-side (e.g. affiliate stats).
+        sessionStorage.setItem(ADMIN_PASSWORD_KEY, password);
         setIsAuthenticated(true);
       } else {
         setError("Invalid password");
@@ -45,6 +49,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   const handleLogout = () => {
     sessionStorage.removeItem("admin_authenticated");
+    sessionStorage.removeItem(ADMIN_PASSWORD_KEY);
     setIsAuthenticated(false);
     setPassword("");
   };
@@ -123,6 +128,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                   className="text-surface-300 hover:text-primary-400 transition-colors"
                 >
                   Blog Posts
+                </Link>
+                <Link
+                  href="/admin/affiliates"
+                  className="text-surface-300 hover:text-primary-400 transition-colors"
+                >
+                  Affiliates
                 </Link>
               </nav>
             </div>

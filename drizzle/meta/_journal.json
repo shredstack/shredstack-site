@@ -134,6 +134,13 @@
       "when": 1790110553898,
       "tag": "0018_add-hyrox-cheer-mark-work-seconds",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795616749429,
+      "tag": "0019_add-affiliate-clicks",
+      "breakpoints": true
     }
   ]
 }
