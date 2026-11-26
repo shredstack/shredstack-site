@@ -11,7 +11,7 @@ import {
 } from "@/components/affiliate/PartnerCategoryFilter";
 
 const DESCRIPTION =
-  "Brands my family and I believe in: some we own, some we've tried, some are on our wish list. I'll always tell you which.";
+  "Brands my family and I believe in: some we own, some are on order, some we've tried, some are on our wish list. I'll always tell you which.";
 
 const ogImage = getFeaturedPartners().find((p) => p.heroImage)?.heroImage;
 

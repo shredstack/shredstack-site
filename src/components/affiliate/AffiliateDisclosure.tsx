@@ -23,7 +23,7 @@ function singleBrandText(name: string, relationship: PartnerRelationship): strin
 }
 
 const MULTI_TEXT =
-  "I'm an affiliate for the brands on this page. If you buy through my links, I earn a small commission at no extra cost to you. I only partner with brands I genuinely believe in, and I'll always tell you whether we own it, have tried it, or just want it.";
+  "I'm an affiliate for the brands on this page. If you buy through my links, I earn a small commission at no extra cost to you. I only partner with brands I genuinely believe in, and I'll always tell you whether we own it, have one on order, have tried it, or just want it.";
 
 /**
  * FTC disclosure. Must render ABOVE the first affiliate link on any page that

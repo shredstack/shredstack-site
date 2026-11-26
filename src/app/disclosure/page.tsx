@@ -87,7 +87,7 @@ export default function DisclosurePage() {
           <Section title="My standard">
             <p>
               I only partner with brands I genuinely believe in. Every brand page says whether we own the
-              product, have tried it, or just have it on our wish list, and I only write reviews of things
+              product, have one on order, have tried it, or just have it on our wish list, and I only write reviews of things
               we actually own. Brands don&apos;t review or approve what I write.
             </p>
           </Section>

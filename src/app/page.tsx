@@ -30,6 +30,18 @@ export default function Home() {
               <Link href="/projects" className="btn-primary">
                 View Projects
               </Link>
+              {/* Featured: promotes /partners while there are featured partners */}
+              {featuredPartners.length > 0 && (
+                <Link
+                  href="/partners"
+                  className="relative inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-rainbow-orange to-rainbow-yellow text-surface-900 font-semibold shadow-lg shadow-rainbow-orange/25 hover:shadow-xl hover:shadow-rainbow-orange/40 hover:brightness-110 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-rainbow-orange focus:ring-offset-2 focus:ring-offset-surface-900"
+                >
+                  Partners
+                  <span className="absolute -top-2 -right-2 rounded-full bg-rainbow-pink px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow">
+                    New
+                  </span>
+                </Link>
+              )}
               <Link href="/contact" className="btn-secondary">
                 Get in Touch
               </Link>
@@ -46,6 +58,44 @@ export default function Home() {
         <div className="absolute left-10 bottom-10 w-64 h-64 bg-rainbow-purple rounded-full blur-3xl opacity-15" />
         <div className="absolute left-1/3 top-20 w-48 h-48 bg-rainbow-teal rounded-full blur-3xl opacity-15" />
       </section>
+
+      {/* Partner Spotlight (renders nothing without featured partners) */}
+      {featuredPartners.length > 0 && (
+        <section id="partners" className="py-20 bg-surface-800 scroll-mt-20">
+          <div className="section-container">
+            <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wider text-rainbow-orange">
+                  Partner spotlight
+                </p>
+                <h2 className="mt-1 text-3xl font-bold text-white">Brands I Support</h2>
+                <p className="mt-2 text-surface-400 max-w-2xl">
+                  Local businesses and brands my family and I believe in. I&apos;ll always tell you
+                  whether we own it, have one on order, have tried it, or just want it.
+                </p>
+              </div>
+              <Link
+                href="/partners"
+                className="text-accent-400 hover:text-accent-300 font-medium transition-colors"
+              >
+                See all partners &rarr;
+              </Link>
+            </div>
+
+            <AffiliateDisclosure variant="multi" className="mb-8 max-w-3xl" />
+
+            {featuredPartners.length === 1 ? (
+              <PartnerCard partner={featuredPartners[0]} src={PLACEMENTS.home} wide />
+            ) : (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {featuredPartners.map((partner) => (
+                  <PartnerCard key={partner.slug} partner={partner} src={PLACEMENTS.home} compact />
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Personal Projects Section */}
       <section className="py-20 bg-surface-900">
@@ -150,37 +200,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      {/* Brands I Support Section (renders nothing without featured partners) */}
-      {featuredPartners.length > 0 && (
-        <section className="py-20 bg-surface-800">
-          <div className="section-container">
-            <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
-              <div>
-                <h2 className="text-3xl font-bold text-white">Brands I Support</h2>
-                <p className="mt-2 text-surface-400 max-w-2xl">
-                  A short list of brands my family and I believe in. I&apos;ll always tell you whether
-                  we own it, have tried it, or just want it.
-                </p>
-              </div>
-              <Link
-                href="/partners"
-                className="text-accent-400 hover:text-accent-300 font-medium transition-colors"
-              >
-                See all partners &rarr;
-              </Link>
-            </div>
-
-            <AffiliateDisclosure variant="multi" className="mb-8 max-w-3xl" />
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {featuredPartners.map((partner) => (
-                <PartnerCard key={partner.slug} partner={partner} src={PLACEMENTS.home} compact />
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* About Preview Section */}
       <section className="py-20 bg-surface-800 relative overflow-hidden">

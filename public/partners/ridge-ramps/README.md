@@ -1,7 +1,11 @@
 # RIDGE Ramps images
 
 Drop image files for the RIDGE Ramps partner page here, then reference them in
-`src/data/partners.ts`. Until then the site uses the gradient + 🛹 emoji fallback.
+`src/data/partners.ts`.
+
+Current: `hero.png` (from `claude_instructions/ridge_ramps_image_1.png`) is the
+hero/card/Open Graph image. Gallery photos are coming; add them as `gallery-1.jpg`,
+`gallery-2.jpg`, ... and list them under `gallery` in `partners.ts`.
 
 ## Expected filenames
 
