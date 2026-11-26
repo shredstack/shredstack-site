@@ -18,6 +18,22 @@
 | Application code | `src/` |
 | SQL migrations | `drizzle/` (auto-generated) |
 
+## Commit and PR Messages
+
+When work is finished and ready to commit or open as a PR, end the reply with copy-paste-ready messages:
+
+- **Always:** a commit title and commit message. Include them even when Claude made the commit itself (show the message it used).
+- **When the branch is ready for a PR:** also a PR title and PR description.
+
+Format them so they paste cleanly into git and GitHub:
+
+- Put each piece in its **own fenced code block**: title separate from body. This copies the raw text and Markdown, not the rendered chat formatting, which loses headings, bullets and backticks.
+  - Commit title and message: ` ```text ` blocks.
+  - PR title: a ` ```text ` block. PR description: a ` ```markdown ` block.
+  - If the content itself contains ` ``` ` fences, wrap it in four backticks (` ```` `) instead.
+- Commit message: an imperative title of about 72 characters or fewer, a blank line, then a body wrapped at about 72 columns that says what changed and why. Keep any required attribution trailer.
+- PR description: GitHub Markdown written for reviewers, using whichever of **Summary**, **Changes**, **Testing** and **After merge** (manual steps) apply.
+
 ## Database Migrations
 
 This project uses [Drizzle ORM](https://orm.drizzle.team/) with Neon PostgreSQL for database management.
