@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+# PR builds get no secrets. Read-only token, nothing else.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Lint, build and analytics guard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (production analytics path)
+        run: npx next build
+        env:
+          VERCEL_ENV: production
+          # Dummy, unreachable on purpose. Never use the real secret in PR builds.
+          NEON_DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Analytics / privacy guard
+        run: bash scripts/check-analytics.sh

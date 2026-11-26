@@ -35,10 +35,13 @@ export type PartnerCategory = keyof typeof PARTNER_CATEGORIES;
 export type PartnerRelationship = "affiliate" | "ambassador" | "sponsored" | "gifted";
 export type PartnerStatus = "active" | "paused" | "ended";
 /** Honest statement of our first-hand experience. Drives badges + copy (§4.4). */
-export type PartnerExperience = "own" | "tried" | "wishlist";
+/** "ordered": we've committed to buying it but haven't used it yet. May say
+ * "we chose / we're getting one", never "we use / we love ours". */
+export type PartnerExperience = "own" | "ordered" | "tried" | "wishlist";
 
 export const EXPERIENCE_LABELS: Record<PartnerExperience, { badge: string; highlightsHeading: string }> = {
   own:      { badge: "We own this",       highlightsHeading: "How we use it" },
+  ordered:  { badge: "Ours is on order",  highlightsHeading: "Why we chose them" },
   tried:    { badge: "We've tried it",    highlightsHeading: "What stood out" },
   wishlist: { badge: "On our wish list",  highlightsHeading: "Why it's on our list" },
 };
@@ -98,41 +101,50 @@ export const partners: Partner[] = [
   {
     slug: "ridge-ramps",
     name: "RIDGE Ramps",
-    tagline: "Backyard skate ramp kits from a local Utah company.",
+    tagline: "Skate ramps built in Utah to stand up to Utah weather, from an owner who truly cares.",
     emoji: "🛹",
     category: "family-backyard",
     relationship: "affiliate",
-    experience: "wishlist",
+    // Ordered for Christmas 2026, installed by the owner. Flip to "own" (+ usingSince,
+    // our own photos, rewritten story) once it's built and the kids are skating it.
+    experience: "ordered",
     status: "active",
     featured: true,
     affiliateUrl: "https://ridgeramps.com?ref=2BgM2",
     websiteUrl: "https://ridgeramps.com",
+    heroImage: {
+      src: "/partners/ridge-ramps/hero.png",
+      alt: "A plywood mini half pipe inside a bright, open room, with a skull logo in the center of the ramp and a skateboard resting on the deck",
+      credit: "Photo: RIDGE Ramps",
+    },
     story: [
-      "My kids tried a RIDGE Ramps half pipe at a friend's house and fell in love. They haven't stopped talking about it since, and a half pipe of our own is now at the very top of their wish list.",
-      "We don't own one yet, so this isn't a review. It's why I'm backing them: RIDGE Ramps is a local Utah company that builds its ramp kits in-house, ships them with pre-drilled parts and instructions, and is refreshingly upfront about how it prices them.",
-      "If you've got skate-obsessed kids too (or you're a grown-up who misses skating), take a look. And if we end up building one, I'll share the whole build here.",
+      "My kids tried a RIDGE Ramps half pipe at a friend's house and fell in love. They haven't stopped talking about it since, so this Christmas we're making it happen: we're getting one of our own.",
+      "Before we bought, I got in touch with the owner, and we had such a nice conversation. He told me why he started RIDGE Ramps here in Utah: other ramp companies had cut costs to the point where their ramps simply don't hold up to Utah weather. He wanted to build ramps that do, ramps that last and hold their value, at a price that's still great for families.",
+      "What stood out most is how much he cares about his Utah customers. He's even installing ours himself. We'll take the kids out for a couple of hours, and when we get back it'll be a finished ramp, ready to be their Christmas present. That's a generous guy.",
+      "We haven't skated ours yet, so this isn't a review. It's why I'm proud to make RIDGE Ramps my first partner: a local owner who builds quality ramps and treats his customers like neighbors. Once ours is built, I'll share photos of the install and the kids' first runs here.",
     ],
     highlights: [
-      "Local: designed and built in Utah",
-      "Kits ship with pre-drilled parts and instructions",
-      "Transparent pricing: they explain exactly how their kits are priced",
+      "Started in Utah, built to stand up to Utah weather",
+      "Made to last and hold their value instead of cutting corners on cost",
+      "An owner who personally takes care of his Utah customers (he's installing ours himself)",
       "Sizes from a 12\" kicker up to full half pipes",
     ],
     goodFor: [
       "Kids who are hooked on skating",
-      "Families with some backyard space",
+      "Utah families who want a ramp that holds up to Utah weather",
+      "A big surprise gift, like a Christmas present",
     ],
     products: [
       {
         key: "half-pipe",
         name: "Half Pipe Ramp Kits",
-        label: "The one we're eyeing",
-        description: "The half pipe is the one my kids fell for at our friend's house. It's the big one on our list.",
+        label: "The one we're getting",
+        description: "The half pipe is the one my kids fell for at our friend's house. Ours is going in as their Christmas present.",
         priceNote: "36\" Half Pipe from $3,095 (Nov 2026)",
         // no affiliateUrl until product deep links are verified (§10); falls back to partner link
       },
     ],
-    closingCta: { heading: "Have a skater at home?", body: "See RIDGE Ramps' full lineup of ramps." },
+    closingCta: { heading: "Have a skater at home?", body: "See RIDGE Ramps' full lineup of Utah-built ramps." },
     gradient: "from-rainbow-orange to-rainbow-yellow",
     appendUtm: false,
   },

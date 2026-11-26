@@ -2,6 +2,7 @@ import { EXPERIENCE_LABELS, type PartnerExperience } from "@/data/partners";
 
 const STYLES: Record<PartnerExperience, string> = {
   own: "bg-rainbow-green/15 text-rainbow-green border-rainbow-green/30",
+  ordered: "bg-rainbow-orange/15 text-rainbow-orange border-rainbow-orange/30",
   tried: "bg-rainbow-cyan/15 text-rainbow-cyan border-rainbow-cyan/30",
   wishlist: "bg-rainbow-yellow/15 text-rainbow-yellow border-rainbow-yellow/30",
 };
